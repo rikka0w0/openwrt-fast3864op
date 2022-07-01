@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#include "bcm63268.dtsi"
+
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "Sagemcom F@st 3864OP";
+	compatible = "sagem,fast-3864op", "brcm,bcm63168", "brcm,bcm63268";
+
+	chosen {
+		bootargs = "rootfstype=squashfs,ubifs noinitrd console=ttyS0,115200";
+		stdout-path = "serial0:115200n8";
+	};
+};
+
+&nflash {
+	status = "okay";
+
+	nandcs@0 {
+		compatible = "brcm,nandcs";
+		#size-cells = <1>;
+		#address-cells = <1>;
+		reg = <0>;
+		nand-ecc-step-size = <512>;
+		nand-ecc-strength = <15>;
+		nand-on-flash-bbt;
+		brcm,nand-oob-sector-size = <64>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "cferom";
+				reg = <0x00000000 0x00020000>;
+				read-only;
+			};
+
+			partition@20000 {
+				label = "rootfs_stock";
+				reg = <0x00020000 0x03d60000>;
+				read-only;
+			};
+
+			partition@3d80000 {
+				label = "rootfs_update";
+				reg = <0x03d80000 0x03d60000>;
+			};
+
+			partition@7b00000 {
+				label = "data_stock";
+				reg = <0x07b00000 0x400000>;
+				read-only;
+			};
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
