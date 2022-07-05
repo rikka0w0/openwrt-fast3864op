@@ -161,9 +161,8 @@ sky,sr102)
 		"0:lan" "1:lan" "2:lan" "3:wan" "8t@eth0"
 	;;
 sagem,fast-3864op)
-	ucidef_set_interfaces_lan_wan "eth0.1" "eth0.2"
 	ucidef_add_switch "switch0" \
-		"0:lan" "1:lan" "2:lan" "3:wan" "8t@eth0"
+		"4:lan" "3:wan" "8t@eth0"
 	;;
 *)
 	ucidef_set_interfaces_lan_wan "eth1" "eth0"
