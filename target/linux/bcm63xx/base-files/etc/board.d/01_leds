@@ -100,6 +100,10 @@ technicolor,tg582n)
 telsey,cpva502plus)
 	ucidef_set_led_netdev "lan" "LAN" "amber:link" "eth0"
 	;;
+sagem,fast-3864op)
+	ucidef_set_led_netdev "wan_act" "wan_act" "amber:wan" "eth0.2" "rx tx"
+	ucidef_set_led_netdev "wan_con" "wan_con" "green:wan" "eth0.2" "link"
+	;;
 esac
 
 board_config_flush
