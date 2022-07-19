@@ -13,6 +13,9 @@ netgear,dgnd3700-v2)
 	ucidef_set_bridge_device switch
 	ucidef_set_interface_lan "extsw"
 	;;
+sagem,fast-3864op)
+	ucidef_set_interfaces_lan_wan "extsw" "wan"
+	;;
 esac
 
 board_config_flush

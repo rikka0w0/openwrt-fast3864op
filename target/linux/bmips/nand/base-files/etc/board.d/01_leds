@@ -11,6 +11,14 @@ led_usb="$(get_dt_led usb)"
 led_usb2="$(get_dt_led usb2)"
 [ -n "$led_usb2" ] && ucidef_set_led_usbdev "usb2" "usb2" "$led_usb2" "2-1"
 
+board=$(board_name)
+case "$board" in
+sagem,fast-3864op)
+        ucidef_set_led_netdev "wan_act" "wan_act" "amber:wan" "wan" "rx tx"
+        ucidef_set_led_netdev "wan_con" "wan_con" "green:wan" "wan" "link"
+        ;;
+esac
+
 board_config_flush
 
 exit 0
