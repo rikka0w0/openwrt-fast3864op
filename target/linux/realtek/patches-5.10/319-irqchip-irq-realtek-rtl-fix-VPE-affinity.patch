@@ -1,3 +1,17 @@
+From 2cd00b51470a30198b048a5fca48a04db77e29cc Mon Sep 17 00:00:00 2001
+From: INAGAKI Hiroshi <musashino.open@gmail.com>
+Date: Fri, 21 May 2021 23:16:37 +0900
+Subject: [PATCH] realtek: backport irq-realtek-rtl driver from 5.12 to 5.10
+
+This patch backports "irq-realtek-rtl" driver to Kernel 5.10 from 5.12.
+"MACH_REALTEK_RTL" is used as a platform name in upstream, but "RTL838X"
+is used in OpenWrt, so update the dependency by the additional patch.
+
+Submitted-by: INAGAKI Hiroshi <musashino.open@gmail.com>
+---
+ drivers/irqchip/irq-realtek-rtl.c             | 38 +++++++++++------
+ 1 files changed, 58 insertions(+), 20 deletions(-)
+
 --- a/drivers/irqchip/irq-realtek-rtl.c
 +++ b/drivers/irqchip/irq-realtek-rtl.c
 @@ -28,6 +28,7 @@ static DEFINE_RAW_SPINLOCK(irq_lock);
@@ -42,7 +56,7 @@
  #define IRR_OFFSET(idx)		(4 * (3 - (idx * 4) / 32))
  #define IRR_SHIFT(idx)		((idx * 4) % 32)
  
-@@ -65,19 +84,33 @@ static inline void write_irr(void __iomem *irr0, int idx, u32 value)
+@@ -65,19 +84,33 @@ static inline void write_irr(void __iome
  	writel(irr, irr0 + offset);
  }
  
@@ -82,7 +96,7 @@
  
  	raw_spin_unlock_irqrestore(&irq_lock, flags);
  }
-@@ -85,16 +118,12 @@ static void realtek_ictl_unmask_irq(struct irq_data *i)
+@@ -85,16 +118,12 @@ static void realtek_ictl_unmask_irq(stru
  static void realtek_ictl_mask_irq(struct irq_data *i)
  {
  	unsigned long flags;
@@ -101,7 +115,7 @@
  
  	raw_spin_unlock_irqrestore(&irq_lock, flags);
  }
-@@ -116,11 +145,17 @@ static int __maybe_unused realtek_ictl_irq_affinity(struct irq_data *i,
+@@ -116,11 +145,17 @@ static int __maybe_unused realtek_ictl_i
  	cpumask_and(&cpu_enable, &cpu_configure, dest);
  	cpumask_andnot(&cpu_disable, &cpu_configure, dest);
  
@@ -121,7 +135,7 @@
  
  	irq_data_update_effective_affinity(i, &cpu_enable);
  
-@@ -149,6 +184,7 @@ static int intc_map(struct irq_domain *d, unsigned int irq, irq_hw_number_t hw)
+@@ -149,6 +184,7 @@ static int intc_map(struct irq_domain *d
  
  	output->child_mask |= BIT(hw);
  	write_irr(REG(RTL_ICTL_IRR0, 0), hw, output->output_index + 1);
@@ -129,7 +143,7 @@
  
  	raw_spin_unlock_irqrestore(&irq_lock, flags);
  
-@@ -279,9 +315,11 @@ static int __init realtek_rtl_of_init(struct device_node *node, struct device_no
+@@ -279,9 +315,11 @@ static int __init realtek_rtl_of_init(st
  			cpumask_set_cpu(cpu, &realtek_ictl_cpu_configurable);
  
  			/* Disable all cascaded interrupts and clear routing */
