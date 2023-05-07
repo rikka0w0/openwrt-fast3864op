@@ -81,3 +81,25 @@ define Device/sercomm_shg2500
   SERCOMM_SWVER := 3207
 endef
 TARGET_DEVICES += sercomm_shg2500
+
+### Sagem ###
+define Device/sagem_fast-3864op
+  $(Device/bcm63xx-nand)
+  DEVICE_VENDOR := Sagemcom
+  DEVICE_MODEL := F@st 3864OP
+  CFE_BOARD_ID := F@ST3864OP
+  CHIP_ID := 63268
+  SOC := bcm63168
+  CFE_RAM_FILE := sagem,fast-3864op/cferam.000
+  CFE_RAM_JFFS2_NAME := cferam.000
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  SUBPAGESIZE := 512
+  VID_HDR_OFFSET := 2048
+  DEVICE_PACKAGES += $(USB2_PACKAGES) \
+    $(B43_PACKAGES) \
+    kmod-leds-bcm6328 kmod-leds-gpio
+  CFE_WFI_VERSION := 0x5732
+  CFE_WFI_FLASH_TYPE := 3
+endef
+TARGET_DEVICES += sagem_fast-3864op
