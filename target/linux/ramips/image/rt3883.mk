@@ -30,6 +30,21 @@ define Device/belkin_f9k1109v1
 endef
 TARGET_DEVICES += belkin_f9k1109v1
 
+define Device/dlink_dap-1522-a1
+  $(Device/uimage-lzma-loader)
+  SOC := rt3662
+  IMAGE_SIZE := 7872k
+  IMAGES += factory.bin
+  IMAGE/factory.bin := append-kernel | append-rootfs
+  DEVICE_VENDOR := D-Link
+  DEVICE_MODEL := DAP-1522
+  DEVICE_VARIANT := A1
+  DEVICE_PACKAGES := uboot-envtools
+  FEATURES := $(filter-out usb,$(FEATURES))
+  SUPPORTED_DEVICES += dap-1522-a1
+endef
+TARGET_DEVICES += dlink_dap-1522-a1
+
 define Device/dlink_dir-645
   $(Device/seama-lzma-loader)
   SOC := rt3662
