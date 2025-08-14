@@ -1,0 +1,173 @@
+#include "rt3883.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+
+/ {
+	compatible = "dlink,dap-1522-b1", "ralink,rt3662-soc", "ralink,rt3883-soc";
+	model = "D-Link DAP-1522 B1";
+
+	aliases {
+		led-boot = &led_wps;
+		led-failsafe = &led_wps;
+		led-running = &led_wps;
+		led-upgrade = &led_wps;
+	};
+
+	rtl8367b {
+		compatible = "realtek,rtl8367b";
+		gpio-sda = <&gpio0 1 GPIO_ACTIVE_HIGH>;
+		gpio-sck = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+		realtek,extif = <6 1 0 1 1 1 1 1 1 2>;
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			gpios = <&gpio0 9 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+
+		wps {
+			label = "wps";
+			gpios = <&gpio0 14 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WPS_BUTTON>;
+		};
+
+		switch1 {
+			label = "switch1";
+			gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESERVED>;
+		};
+
+		switch2 {
+			label = "switch2";
+			gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESERVED>;
+		};
+
+		switch3 {
+			label = "switch3";
+			gpios = <&gpio0 19 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESERVED>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		bridge {
+			label = "blue:bridge";
+			gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;
+		};
+
+		red_power {
+			label = "red:power";
+			gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
+		};
+
+		blue_power {
+			label = "blue:power";
+			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
+		};
+
+		led_wps: wps {
+			function = LED_FUNCTION_WPS;
+			color = <LED_COLOR_ID_BLUE>;
+			gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&spi0 {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <25000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "uboot";
+				reg = <0x0 0x30000>;
+				read-only;
+			};
+
+			partition@30000 {
+				label = "uboot-env";
+				reg = <0x30000 0x4000>;
+				read-only;
+			};
+
+			partition@34000 {
+				label = "factory";
+				reg = <0x34000 0x4000>;
+				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					eeprom_factory_0: eeprom@0 {
+						reg = <0x0 0x200>;
+					};
+
+					macaddr_factory_4: macaddr@4 {
+						reg = <0x4 0x6>;
+					};
+				};
+			};
+
+			partition@38000 {
+				label = "nvram";
+				reg = <0x38000 0x8000>;
+				read-only;
+			};
+
+			partition@40000 {
+				label = "devdata";
+				reg = <0x40000 0x10000>;
+			};
+
+			partition@50000 {
+				compatible = "denx,uimage";
+				reg = <0x00050000 0x007b0000>;
+				label = "firmware";
+			};
+		};
+	};
+};
+
+&state_default {
+	gpio {
+		groups = "i2c", "jtag", "uartf";
+		function = "gpio";
+	};
+};
+
+&ethernet {
+	nvmem-cells = <&macaddr_factory_4>;
+	nvmem-cell-names = "mac-address";
+
+	port@0 {
+		mediatek,fixed-link = <1000 1 1 0>;
+	};
+};
+
+&wmac {
+	nvmem-cells = <&eeprom_factory_0>;
+	nvmem-cell-names = "eeprom";
+};
