@@ -44,6 +44,11 @@ arcadyan,we420223-99|\
 dlink,dir-806a-b1)
 	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x1000" "0x1000"
 	;;
+dlink,dap-1522-b1)
+	idx="$(find_mtd_index uboot-env)"
+	[ -n "$idx" ] && \
+		ubootenv_add_uci_config "/dev/mtd$idx" "0x0" "0x1000" "0x1000"
+	;;
 asus,rt-ax53u|\
 asus,rt-ax54|\
 asus,4g-ax56|\
