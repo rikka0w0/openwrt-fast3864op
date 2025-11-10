@@ -54,3 +54,14 @@ define Device/huawei_hg556a-c
     kmod-leds-gpio
 endef
 TARGET_DEVICES += huawei_hg556a-c
+
+define Device/tp-link_td-w8960-v1
+  $(Device/bcm63xx-cfe-legacy)
+  DEVICE_VENDOR := TP-Link
+  DEVICE_MODEL := TD-W8960N
+  DEVICE_VARIANT := v1
+  CHIP_ID := 6358
+  CFE_BOARD_ID := 96358VW2
+  DEVICE_PACKAGES += $(B43_PACKAGES) kmod-leds-gpio
+endef
+TARGET_DEVICES += tp-link_td-w8960-v1

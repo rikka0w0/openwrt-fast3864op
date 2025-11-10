@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#include "bcm6358.dtsi"
+
+/ {
+	model = "TP-Link TD-W8960N v1";
+	compatible = "tp-link,td-w8960-v1", "brcm,bcm6358";
+
+	aliases {
+		led-boot = &led_indicator;
+		led-failsafe = &led_indicator;
+		led-running = &led_indicator;
+		led-upgrade = &led_indicator;
+	};
+
+	keys {
+		compatible = "gpio-keys-polled";
+		poll-interval = <100>;
+
+		wlan {
+			label = "wlan";
+			gpios = <&gpio 37 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WLAN>;
+			debounce-interval = <60>;
+		};
+
+		reset {
+			label = "reset";
+			gpios = <&gpio 36 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_CONFIG>;
+			debounce-interval = <60>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led-9 {
+			label = "green:internet";
+			gpios = <&gpio 2 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_indicator: led-2 {
+			label = "green:adsl";
+			gpios = <&gpio 22 GPIO_ACTIVE_LOW>;
+		};
+
+		led-8 {
+			label = "green:qss";
+			gpios = <&gpio 4 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&ethernet1 {
+	status = "okay";
+
+	nvmem-cells = <&macaddr_cfe_6a0 0>;
+	nvmem-cell-names = "mac-address";
+
+	phy-mode = "mii";
+
+	fixed-link {
+		speed = <100>;
+		full-duplex;
+	};
+};
+
+&iudma {
+	status = "okay";
+};
+
+&pci {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&mdio1 {
+	switch@1e {
+		compatible = "brcm,bcm5325";
+		reg = <30>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				label = "lan4";
+
+				phy-mode = "mii";
+			};
+
+			port@1 {
+				reg = <1>;
+				label = "lan3";
+
+				phy-mode = "mii";
+			};
+
+			port@2 {
+				reg = <2>;
+				label = "lan2";
+
+				phy-mode = "mii";
+			};
+
+			port@3 {
+				reg = <3>;
+				label = "lan1";
+
+				phy-mode = "mii";
+			};
+
+			port@5 {
+				reg = <5>;
+				label = "cpu";
+
+				phy-mode = "internal";
+				ethernet = <&ethernet1>;
+
+				fixed-link {
+					speed = <100>;
+					full-duplex;
+				};
+			};
+		};
+	};
+};
+
+&lsspi {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		spi-max-frequency = <781000>;
+		reg = <0>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "cfe";
+				reg = <0 0x10000>;
+				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					macaddr_cfe_6a0: macaddr@6a0 {
+						compatible = "mac-base";
+						reg = <0x6a0 0x6>;
+						#nvmem-cell-cells = <1>;
+					};
+				};
+			};
+
+			partition@10000 {
+				compatible = "brcm,bcm963xx-imagetag";
+				reg = <0x010000 0xFE0000>; // Aligned to 64kB boundary
+				label = "firmware";
+			};
+
+			partition@FFA000 {
+				reg = <0xFFA000 0x006000>;
+				label = "nvram";
+				read-only;
+			};
+		};
+	};
+};
