@@ -1,0 +1,30 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -548,10 +548,24 @@ static void b43_phy_ht_tx_power_ctl(stru
+ 			was_enabled |= b43_phy_read(dev, cmd_regs[i]) & en_bits;
+ 		if (was_enabled) {
+ 			/* We disable enabled TX pwr ctl, save it's state */
+-			for (i = 0; i < 3; i++)
+-				phy_ht->tx_pwr_idx[i] =
+-					b43_phy_read(dev, status_regs[i]);
++			for (i = 0; i < 3; i++) {
++				u16 status = b43_phy_read(dev, status_regs[i]);
++
++				if (b43_cg3000_4331_board(dev)) {
++					/*
++					 * CG3000 eCos keeps the HTPHY TXPCTL
++					 * init index at 0x19 for all cores. On
++					 * this board the current index is reported
++					 * in the upper status byte; storing the low
++					 * byte clears C2/C3 on re-enable.
++					 */
++					phy_ht->tx_pwr_idx[i] =
++						(status >> 8) & B43_PHY_HT_TXPCTL_CMD_C1_INIT;
++				} else {
++					phy_ht->tx_pwr_idx[i] = status;
++				}
++			}
+ 		}
+ 		for (i = 0; i < 3; i++)
+ 			b43_phy_mask(dev, cmd_regs[i], 0xffff & ~en_bits);
+ 	} else {

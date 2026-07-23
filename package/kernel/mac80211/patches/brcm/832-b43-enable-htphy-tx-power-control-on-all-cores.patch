@@ -1,0 +1,29 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -544,16 +544,22 @@ static void b43_phy_ht_tx_power_ctl(stru
+ 					    B43_PHY_HT_TX_PCTL_STATUS_C3 };
+ 	int i;
+ 
+ 	if (!enable) {
+-		if (b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C1) & en_bits) {
++		bool was_enabled = false;
++
++		for (i = 0; i < 3; i++)
++			was_enabled |= b43_phy_read(dev, cmd_regs[i]) & en_bits;
++		if (was_enabled) {
+ 			/* We disable enabled TX pwr ctl, save it's state */
+ 			for (i = 0; i < 3; i++)
+ 				phy_ht->tx_pwr_idx[i] =
+ 					b43_phy_read(dev, status_regs[i]);
+ 		}
+-		b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1, 0xffff & ~en_bits);
++		for (i = 0; i < 3; i++)
++			b43_phy_mask(dev, cmd_regs[i], 0xffff & ~en_bits);
+ 	} else {
+-		b43_phy_set(dev, B43_PHY_HT_TXPCTL_CMD_C1, en_bits);
++		for (i = 0; i < 3; i++)
++			b43_phy_set(dev, cmd_regs[i], en_bits);
+ 
+ 		if (b43_current_band(dev->wl) == NL80211_BAND_5GHZ) {
+ 			for (i = 0; i < 3; i++)
+ 				b43_phy_write(dev, cmd_regs[i], 0x32);

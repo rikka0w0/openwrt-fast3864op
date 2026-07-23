@@ -1,0 +1,30 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -1599,6 +1599,27 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 		b1[0] = b1[1] = b1[2] = -1393;
+ 	}
+ 
++	if (b43_cg3000_4331_board(dev) &&
++	    b43_current_band(dev->wl) == NL80211_BAND_2GHZ) {
++		if (b43_modparam_cg3000_target_power >= 0) {
++			u8 override = b43_modparam_cg3000_target_power & 0xff;
++
++			for (c = 0; c < 3; c++)
++				target[c] = override;
++		}
++		/*
++		 * eCos MCP_iHtPhySetupTxPowerControl() derives its target from
++		 * per-core 2 GHz board initvars plus temperature-power offsets,
++		 * not directly from SPROM maxpwr.  CG3000 initramfs tests found
++		 * 124 to be the strongest stable b43 value; the module parameter
++		 * remains writable for later RF/power-control sweeps.
++		 */
++		b43info(dev->wl,
++			"CG3000 HTPHY target power: %u/%u/%u param=%d\n",
++			target[0], target[1], target[2],
++			b43_modparam_cg3000_target_power);
++	}
++
+ 	b43_phy_set(dev, B43_PHY_HT_TSSIMODE, B43_PHY_HT_TSSIMODE_EN);
+ 	if (b43_cg3000_4331_board(dev)) {
+ 		/* eCos MCP_iHtPhySetupTxPowerControl sets raw HTPHY 0x122[0]. */

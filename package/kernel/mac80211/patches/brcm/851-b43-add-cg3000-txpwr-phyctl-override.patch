@@ -1,0 +1,66 @@
+--- a/drivers/net/wireless/broadcom/b43/b43.h
++++ b/drivers/net/wireless/broadcom/b43/b43.h
+@@ -1112,8 +1112,10 @@ static inline void b43_stop_queue(struct
+ extern int b43_modparam_cg3000_tssi_mux;
+ extern int b43_modparam_cg3000_txpwr_idx;
+ extern int b43_modparam_cg3000_tx_ant_phyctl;
++extern int b43_modparam_cg3000_txpwr_phyctl;
+ extern int b43_modparam_cg3000_aa2g;
+ bool b43_cg3000_4331_board(struct b43_wldev *dev);
++u16 b43_cg3000_txpwr_phy_ctl(struct b43_wldev *dev);
+ 
+ /* Message printing */
+ __printf(2, 3) void b43info(struct b43_wl *wl, const char *fmt, ...);
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -134,6 +134,11 @@ module_param_named(cg3000_tx_ant_phyctl,
+ MODULE_PARM_DESC(cg3000_tx_ant_phyctl,
+ 		 "Override CG3000-2STAUS HTPHY TX header antenna bits (-1 uses SPROM txchain)");
+ 
++int b43_modparam_cg3000_txpwr_phyctl = -1;
++module_param_named(cg3000_txpwr_phyctl, b43_modparam_cg3000_txpwr_phyctl, int, 0644);
++MODULE_PARM_DESC(cg3000_txpwr_phyctl,
++		 "Override CG3000-2STAUS PHY TX header power field 0..63 (-1 uses 63)");
++
+ int b43_modparam_cg3000_aa2g = 3;
+ module_param_named(cg3000_aa2g, b43_modparam_cg3000_aa2g, int, 0644);
+ MODULE_PARM_DESC(cg3000_aa2g,
+@@ -1772,6 +1777,19 @@ u16 b43_tx_antenna_phy_ctl(struct b43_wl
+ 	return (txchain << 6) & B43_TXH_PHY_ANT;
+ }
+ 
++u16 b43_cg3000_txpwr_phy_ctl(struct b43_wldev *dev)
++{
++	int txpwr = b43_modparam_cg3000_txpwr_phyctl;
++
++	if (!b43_cg3000_4331_board(dev))
++		return B43_TXH_PHY_TXPWR;
++	if (txpwr < 0)
++		txpwr = B43_TXH_PHY_TXPWR >> B43_TXH_PHY_TXPWR_SHIFT;
++
++	return (txpwr & (B43_TXH_PHY_TXPWR >> B43_TXH_PHY_TXPWR_SHIFT)) <<
++	       B43_TXH_PHY_TXPWR_SHIFT;
++}
++
+ static u16 b43_beacon_phy_ctl1(struct b43_wldev *dev, u8 rate)
+ {
+ 	if (dev->phy.type != B43_PHYTYPE_HT)
+@@ -3569,7 +3587,7 @@ static void b43_set_phytxctl_defaults(st
+ 
+ 	ctl |= B43_TXH_PHY_ENC_CCK;
+ 	ctl |= B43_TXH_PHY_ANT01AUTO;
+-	ctl |= B43_TXH_PHY_TXPWR;
++	ctl |= b43_cg3000_txpwr_phy_ctl(dev);
+ 
+ 	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_BEACPHYCTL, ctl);
+ 	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_ACKCTSPHYCTL, ctl);
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -537,8 +537,8 @@ int b43_generate_txhdr(struct b43_wldev
+ 
+ 	phy_ctl |= b43_tx_antenna_phy_ctl(dev);
+ 	if (b43_cg3000_4331_board(dev))
+-		phy_ctl |= B43_TXH_PHY_TXPWR;
++		phy_ctl |= b43_cg3000_txpwr_phy_ctl(dev);
+ 
+ 	/* MAC control */

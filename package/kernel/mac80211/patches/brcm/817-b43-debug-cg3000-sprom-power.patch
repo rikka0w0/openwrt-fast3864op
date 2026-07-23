@@ -1,0 +1,118 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -454,6 +454,56 @@ void b43err(struct b43_wl *wl, const cha
+ 	va_end(args);
+ }
+ 
++static bool b43_cg3000_4331_board(struct b43_wldev *dev)
++{
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
++
++	return dev->dev->chip_id == BCMA_CHIP_ID_BCM4331 &&
++	       dev->phy.type == B43_PHYTYPE_HT &&
++	       sprom->revision == 9 &&
++	       sprom->board_type == 0x05a9 &&
++	       sprom->board_rev == 0x1100;
++}
++
++static void b43_cg3000_dump_sprom(struct b43_wldev *dev)
++{
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
++	int i;
++
++	if (!b43_cg3000_4331_board(dev))
++		return;
++
++	b43info(dev->wl,
++		"SPROM rev=%u board_rev=0x%04x board_type=0x%04x board_num=0x%04x dev_id=0x%04x alpha2=%c%c\n",
++		sprom->revision, sprom->board_rev, sprom->board_type,
++		sprom->board_num, sprom->dev_id, sprom->alpha2[0],
++		sprom->alpha2[1]);
++	b43info(dev->wl,
++		"SPROM flags: bfl_lo=0x%04x bfl_hi=0x%04x bfl2_lo=0x%04x bfl2_hi=0x%04x ant_a=0x%02x ant_bg=0x%02x txchain=0x%02x rxchain=0x%02x antswitch=0x%02x\n",
++		sprom->boardflags_lo, sprom->boardflags_hi,
++		sprom->boardflags2_lo, sprom->boardflags2_hi,
++		sprom->ant_available_a, sprom->ant_available_bg,
++		sprom->txchain, sprom->rxchain, sprom->antswitch);
++	b43info(dev->wl,
++		"SPROM FEM 2g: tssipos=%u extpa_gain=%u pdet_range=%u tr_iso=%u antswlut=%u; gpio=%02x/%02x/%02x/%02x maxpwr_bg=%u itssi_bg=%u cck2gpo=0x%04x ofdm2gpo=0x%08x mcs2gpo=%04x/%04x/%04x/%04x/%04x/%04x/%04x/%04x\n",
++		sprom->fem.ghz2.tssipos, sprom->fem.ghz2.extpa_gain,
++		sprom->fem.ghz2.pdet_range, sprom->fem.ghz2.tr_iso,
++		sprom->fem.ghz2.antswlut, sprom->gpio0, sprom->gpio1,
++		sprom->gpio2, sprom->gpio3, sprom->maxpwr_bg,
++		sprom->itssi_bg, sprom->cck2gpo, sprom->ofdm2gpo,
++		sprom->mcs2gpo[0], sprom->mcs2gpo[1], sprom->mcs2gpo[2],
++		sprom->mcs2gpo[3], sprom->mcs2gpo[4], sprom->mcs2gpo[5],
++		sprom->mcs2gpo[6], sprom->mcs2gpo[7]);
++	for (i = 0; i < 3; i++)
++		b43info(dev->wl,
++			"SPROM core%d 2g: itssi=%u maxpwr=%u pa=%04x/%04x/%04x\n",
++			i, sprom->core_pwr_info[i].itssi_2g,
++			sprom->core_pwr_info[i].maxpwr_2g,
++			sprom->core_pwr_info[i].pa_2g[0],
++			sprom->core_pwr_info[i].pa_2g[1],
++			sprom->core_pwr_info[i].pa_2g[2]);
++}
++
+ void b43warn(struct b43_wl *wl, const char *fmt, ...)
+ {
+ 	struct va_format vaf;
+@@ -2948,9 +2984,47 @@ static int b43_gpio_init(struct b43_wlde
+ 
+ 	switch (dev->dev->bus_type) {
+ #ifdef CPTCFG_B43_BCMA
+-	case B43_BUS_BCMA:
+-		bcma_chipco_gpio_control(&dev->dev->bdev->bus->drv_cc, mask, set);
++	case B43_BUS_BCMA: {
++		struct bcma_drv_cc *cc = &dev->dev->bdev->bus->drv_cc;
++		u32 gpio_ctl = bcma_chipco_gpio_control(cc, mask, set);
++		u16 mmio_gpio_mask = b43_read16(dev, B43_MMIO_GPIO_MASK);
++		u16 mmio_gpio_ctl = b43_read16(dev, B43_MMIO_GPIO_CONTROL);
++		u32 chipctl_before = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
++		u32 chipctl_after = chipctl_before;
++
++		if (b43_cg3000_4331_board(dev)) {
++			/*
++			 * This BCM4331 is package 8.  The generic BCMA PMU
++			 * setup enables EXTPA_EN and EXTPA_EN2 for that
++			 * package.  Keep that normal package-8 external-PA
++			 * path unless a later debug override asks for another
++			 * ChipControl value.
++			 */
++			chipctl_after |= BCMA_CHIPCTL_4331_EXTPA_EN |
++					 BCMA_CHIPCTL_4331_EXTPA_EN2;
++			bcma_cc_write32(cc, BCMA_CC_CHIPCTL, chipctl_after);
++			chipctl_after = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
++			b43info(dev->wl,
++				"CG3000-2STAUS ChipControl fixup: before=0x%08x after=0x%08x\n",
++				chipctl_before, chipctl_after);
++
++		}
++
++		b43info(dev->wl,
++			"GPIO init: mask=0x%08x set=0x%08x gpio_ctl=0x%08x mmio_gpio_mask=0x%04x mmio_gpio_ctl=0x%04x\n",
++			mask, set, gpio_ctl, mmio_gpio_mask, mmio_gpio_ctl);
++		if (dev->dev->chip_id == BCMA_CHIP_ID_BCM4331)
++			b43info(dev->wl,
++				"BCMA CC state: chipctl=0x%08x gpioin=0x%08x gpioout=0x%08x gpioouten=0x%08x gpioctl=0x%08x pullup=0x%08x pulldown=0x%08x\n",
++				chipctl_after,
++				bcma_cc_read32(cc, BCMA_CC_GPIOIN),
++				bcma_cc_read32(cc, BCMA_CC_GPIOOUT),
++				bcma_cc_read32(cc, BCMA_CC_GPIOOUTEN),
++				bcma_cc_read32(cc, BCMA_CC_GPIOCTL),
++				bcma_cc_read32(cc, BCMA_CC_GPIOPULLUP),
++				bcma_cc_read32(cc, BCMA_CC_GPIOPULLDOWN));
+ 		break;
++	}
+ #endif
+ #ifdef CPTCFG_B43_SSB
+ 	case B43_BUS_SSB:
+@@ -5538,6 +5590,8 @@ static int b43_wireless_core_attach(stru
+ 	if (err)
+ 		goto err_phy_free;
+ 
++	b43_cg3000_dump_sprom(dev);
++
+ 	/* Now set some default "current_dev" */
+ 	if (!wl->current_dev)
+ 		wl->current_dev = dev;

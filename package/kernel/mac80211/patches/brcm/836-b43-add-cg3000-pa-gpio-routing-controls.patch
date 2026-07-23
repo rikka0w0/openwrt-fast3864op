@@ -1,0 +1,86 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -129,6 +129,26 @@
+ MODULE_PARM_DESC(cg3000_txpwr_idx,
+ 		 "Override HTPHY TX power index on CG3000-2STAUS (-1 keeps driver default)");
+ 
++static int b43_modparam_cg3000_gpio_mask = -1;
++module_param_named(cg3000_gpio_mask, b43_modparam_cg3000_gpio_mask, int, 0644);
++MODULE_PARM_DESC(cg3000_gpio_mask,
++		 "Override CG3000-2STAUS ChipCommon GPIO control mask (-1 uses GPIO0-4 and GPIO6)");
++
++static int b43_modparam_cg3000_gpio_set = -1;
++module_param_named(cg3000_gpio_set, b43_modparam_cg3000_gpio_set, int, 0644);
++MODULE_PARM_DESC(cg3000_gpio_set,
++		 "Override CG3000-2STAUS ChipCommon GPIO control value (-1 routes GPIO0-4 and GPIO6 through WLAN core)");
++
++static int b43_modparam_cg3000_gpio_out = 0x5f;
++module_param_named(cg3000_gpio_out, b43_modparam_cg3000_gpio_out, int, 0644);
++MODULE_PARM_DESC(cg3000_gpio_out,
++		 "Force CG3000-2STAUS ChipCommon GPIO output bits (default drives GPIO0-4 and GPIO6 high; -1 leaves them under ucode control)");
++
++static int b43_modparam_cg3000_gpio_outen = 0x5f;
++module_param_named(cg3000_gpio_outen, b43_modparam_cg3000_gpio_outen, int, 0644);
++MODULE_PARM_DESC(cg3000_gpio_outen,
++		 "Force CG3000-2STAUS ChipCommon GPIO output-enable bits (default drives GPIO0-4 and GPIO6; -1 leaves them under ucode control)");
++
+ static int modparam_allhwsupport = 1;
+ module_param_named(allhwsupport, modparam_allhwsupport, int, 0444);
+ MODULE_PARM_DESC(allhwsupport, "Enable support for all hardware (even it if overlaps with the brcmsmac driver)");
+@@ -3097,7 +3112,7 @@
+ #ifdef CPTCFG_B43_BCMA
+ 	case B43_BUS_BCMA: {
+ 		struct bcma_drv_cc *cc = &dev->dev->bdev->bus->drv_cc;
+-		u32 gpio_ctl = bcma_chipco_gpio_control(cc, mask, set);
++		u32 gpio_ctl;
+ 		u16 mmio_gpio_mask = b43_read16(dev, B43_MMIO_GPIO_MASK);
+ 		u16 mmio_gpio_ctl = b43_read16(dev, B43_MMIO_GPIO_CONTROL);
+ 		u32 chipctl_before = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
+@@ -3106,3 +3126,18 @@
+ 	if (b43_cg3000_4331_board(dev)) {
++			/*
++			 * The package-8 setup routes GPIO0-4 through GPIOCTL.
++			 * brcmsmac's EPA workaround also routes GPIO6 through GPIOCTL;
++			 * keep both routes so the external PA control line is owned by
++			 * the WLAN core.  GPIO5 and direct GPIOOUT/GPIOOUTEN overrides
++			 * remain available as module parameters for board bring-up.
++			 */
++			mask |= BIT(4) | BIT(6);
++			set |= BIT(4) | BIT(6);
++			if (b43_modparam_cg3000_gpio_mask >= 0)
++				mask = b43_modparam_cg3000_gpio_mask;
++			if (b43_modparam_cg3000_gpio_set >= 0)
++				set = b43_modparam_cg3000_gpio_set;
++			b43_maskset16(dev, B43_MMIO_GPIO_MASK, ~0, mask & 0xffff);
++
+ 		/*
+ 	 	 * This BCM4331 is package 8.  The generic BCMA PMU
+@@ -3123,11 +3156,28 @@
+ 	 				"CG3000-2STAUS ChipControl fixup: before=0x%08x after=0x%08x\n",
+ 	 				chipctl_before, chipctl_after);
+ 
++			if (b43_modparam_cg3000_gpio_out >= 0)
++				bcma_chipco_gpio_out(cc, mask,
++						     b43_modparam_cg3000_gpio_out);
++			if (b43_modparam_cg3000_gpio_outen >= 0)
++				bcma_chipco_gpio_outen(cc, mask,
++						       b43_modparam_cg3000_gpio_outen);
+ 		}
+ 
++		gpio_ctl = bcma_chipco_gpio_control(cc, mask, set);
++		mmio_gpio_mask = b43_read16(dev, B43_MMIO_GPIO_MASK);
++		mmio_gpio_ctl = b43_read16(dev, B43_MMIO_GPIO_CONTROL);
++
+ 		b43info(dev->wl,
+ 			"GPIO init: mask=0x%08x set=0x%08x gpio_ctl=0x%08x mmio_gpio_mask=0x%04x mmio_gpio_ctl=0x%04x\n",
+ 			mask, set, gpio_ctl, mmio_gpio_mask, mmio_gpio_ctl);
++		if (b43_cg3000_4331_board(dev))
++			b43info(dev->wl,
++				"CG3000 GPIO routing params: gpio_mask=%d gpio_set=%d gpio_out=%d gpio_outen=%d\n",
++				b43_modparam_cg3000_gpio_mask,
++				b43_modparam_cg3000_gpio_set,
++				b43_modparam_cg3000_gpio_out,
++				b43_modparam_cg3000_gpio_outen);
+ 		if (dev->dev->chip_id == BCMA_CHIP_ID_BCM4331)
+ 			b43info(dev->wl,
+ 				"BCMA CC state: chipctl=0x%08x gpioin=0x%08x gpioout=0x%08x gpioouten=0x%08x gpioctl=0x%08x pullup=0x%08x pulldown=0x%08x\n",

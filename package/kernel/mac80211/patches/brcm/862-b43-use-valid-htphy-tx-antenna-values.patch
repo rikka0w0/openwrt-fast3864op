@@ -1,0 +1,82 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -1744,13 +1744,13 @@ static u16 b43_tx_antenna_to_phyctl(stru
+ 
+ 	switch (antenna) {
+ 	case B43_ANTENNA0:
+-		return 1 << 6;
++		return B43_TXH_PHY_ANT0;
+ 	case B43_ANTENNA1:
+-		return 2 << 6;
++		return B43_TXH_PHY_ANT1;
+ 	case B43_ANTENNA2:
+-		return 4 << 6;
++		return B43_TXH_PHY_ANT2;
+ 	case B43_ANTENNA3:
+-		return 8 << 6;
++		return B43_TXH_PHY_ANT3;
+ 	}
+ 
+ 	txchain = dev->dev->bus_sprom->txchain & 0xf;
+@@ -1758,8 +1758,20 @@ static u16 b43_tx_antenna_to_phyctl(stru
+ 		txchain = dev->dev->bus_sprom->ant_available_bg & 0xf;
+ 	if (!txchain)
+ 		return B43_TXH_PHY_ANT01AUTO;
+ 
+-	return (txchain << 6) & B43_TXH_PHY_ANT;
++
++	switch (txchain) {
++	case BIT(0):
++		return B43_TXH_PHY_ANT0;
++	case BIT(1):
++		return B43_TXH_PHY_ANT1;
++	case BIT(2):
++		return B43_TXH_PHY_ANT2;
++	case BIT(3):
++		return B43_TXH_PHY_ANT3;
++	default:
++		return B43_TXH_PHY_ANT01AUTO;
++	}
+ }
+ 
+ u16 b43_cg3000_txpwr_phy_ctl(struct b43_wldev *dev)
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -286,13 +286,13 @@ static u16 b43_tx_antenna_phy_ctl(struct
+ 
+ 		switch (dev->tx_antenna) {
+ 		case B43_ANTENNA0:
+-			return 1 << 6;
++			return B43_TXH_PHY_ANT0;
+ 		case B43_ANTENNA1:
+-			return 2 << 6;
++			return B43_TXH_PHY_ANT1;
+ 		case B43_ANTENNA2:
+-			return 4 << 6;
++			return B43_TXH_PHY_ANT2;
+ 		case B43_ANTENNA3:
+-			return 8 << 6;
++			return B43_TXH_PHY_ANT3;
+ 		}
+ 
+ 		if (!txchain)
+@@ -300,7 +300,18 @@ static u16 b43_tx_antenna_phy_ctl(struct
+ 		if (!txchain)
+ 			return B43_TXH_PHY_ANT01AUTO;
+ 
+-		return (txchain << 6) & B43_TXH_PHY_ANT;
++		switch (txchain) {
++		case BIT(0):
++			return B43_TXH_PHY_ANT0;
++		case BIT(1):
++			return B43_TXH_PHY_ANT1;
++		case BIT(2):
++			return B43_TXH_PHY_ANT2;
++		case BIT(3):
++			return B43_TXH_PHY_ANT3;
++		default:
++			return B43_TXH_PHY_ANT01AUTO;
++		}
+ 	}
+ 
+ 	if (dev->phy.gmode)

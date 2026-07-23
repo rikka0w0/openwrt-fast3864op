@@ -1,0 +1,113 @@
+--- a/drivers/net/wireless/broadcom/b43/b43.h
++++ b/drivers/net/wireless/broadcom/b43/b43.h
+@@ -394,6 +394,7 @@
+ #define B43_HF_ANTSELMODE	0x000200000000ULL /* Antenna selection mode (rev >= 13 only) */
+ #define B43_HF_MLADVW		0x001000000000ULL /* N PHY ML ADV workaround (rev >= 13 only) */
+ #define B43_HF4_EXTPA_ENABLE	0x4000 /* External PA present */
+ #define B43_HF5_4313_GPIOCTRL	0x0001 /* BCM4313/4331 ucode GPIO control */
++#define B43_HF5_CG3000_AA2G3	0x0040 /* CG3000 eCos aa2g=3 antenna path */
+ 
+ #define B43_HF_PR45960W		0x080000000000ULL /* PR 45960 workaround (rev >= 13 only) */
+ 
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -581,11 +581,28 @@ static void b43_phy_ht_tx_power_ctl(stru
+ static void b43_phy_ht_tx_power_ctl_idle_tssi(struct b43_wldev *dev)
+ {
+ 	struct b43_phy_ht *phy_ht = dev->phy.ht;
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
+ 	static const u16 base[] = { 0x840, 0x860, 0x880 };
+ 	u16 save_regs[3][3];
+ 	s32 rssi_buf[6];
+ 	int core;
+ 
++	if (b43_cg3000_4331_board(dev) &&
++	    b43_current_band(dev->wl) == NL80211_BAND_2GHZ) {
++		/*
++		 * eCos MCP_iHtPhySetupTxPowerControl() uses the parsed per-core
++		 * 2 GHz idle TSSI initvars and passes them directly to
++		 * MCP_iHtPhySetIdleTssiForCore(), instead of measuring them
++		 * with a live TX tone.
++		 */
++		for (core = 0; core < 3; core++)
++			phy_ht->idle_tssi[core] = sprom->core_pwr_info[core].itssi_2g;
++		b43info(dev->wl, "CG3000 HTPHY idle TSSI from SPROM: %u/%u/%u\n",
++			phy_ht->idle_tssi[0], phy_ht->idle_tssi[1],
++			phy_ht->idle_tssi[2]);
++		return;
++	}
++
+ 	for (core = 0; core < 3; core++) {
+ 		save_regs[core][1] = b43_phy_read(dev, base[core] + 6);
+ 		save_regs[core][2] = b43_phy_read(dev, base[core] + 7);
+@@ -1309,6 +1323,7 @@ static void b43_phy_ht_cg3000_apply_tab
+ static void b43_phy_ht_cg3000_apply_aa2g(struct b43_wldev *dev)
+ {
+ 	u8 aa2g;
++	u16 hostf5;
+ 
+ 	if (!b43_cg3000_4331_board(dev))
+ 		return;
+@@ -1320,13 +1335,15 @@ static void b43_phy_ht_cg3000_apply_aa2g
+ 	aa2g = b43_modparam_cg3000_aa2g;
+ 
+ 	/*
+-	 * eCos MCP_iWlHtphyParseInitvars reads the aa2g initvar and calls
+-	 * sub_80A75C2C() when it is non-zero.  That helper only changes
+-	 * hardware-visible HTPHY registers for aa2g values 1, 2 and 3.
+-	 * Its final write updates an eCos-side raw-PHY shadow/cache bank;
+-	 * b43 has no matching shadow object here, so only the direct HTPHY
+-	 * register writes are mirrored.
++	 * eCos MCP_iWlHtphyParseInitvars reads the aa2g initvar and calls
++	 * MCP_iHtPhyApplyAa2gAntennaConfig() when it is non-zero.  That
++	 * helper changes direct HTPHY registers for aa2g values 1, 2 and 3,
++	 * then updates ucode HostFlags5 bit 0x0040 through eCos' shared-memory
++	 * host-flag cache.
+ 	 */
++	hostf5 = b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5);
++	hostf5 &= ~B43_HF5_CG3000_AA2G3;
++
+ 	switch (aa2g) {
+ 	case 1:
+ 		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0000);
+@@ -1345,6 +1361,7 @@ static void b43_phy_ht_cg3000_apply_aa2g
+ 		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0000);
+ 		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
+ 		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0000);
++		hostf5 |= B43_HF5_CG3000_AA2G3;
+ 		break;
+ 	default:
+ 		b43info(dev->wl,
+@@ -1353,10 +1370,13 @@ static void b43_phy_ht_cg3000_apply_aa2g
+ 		return;
+ 	}
+ 
++	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5, hostf5);
++
+ 	b43info(dev->wl,
+-		"CG3000 HTPHY aa2g=%u applied: phy410=0x%04x phy4b0=0x%04x phy4b1=0x%04x\n",
++		"CG3000 HTPHY aa2g=%u applied: phy410=0x%04x phy4b0=0x%04x phy4b1=0x%04x hostf5=0x%04x\n",
+ 		aa2g, b43_phy_read(dev, 0x0410), b43_phy_read(dev, 0x04b0),
+-		b43_phy_read(dev, 0x04b1));
++		b43_phy_read(dev, 0x04b1),
++		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5));
+ }
+ 
+ static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)
+@@ -1437,8 +1457,14 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 			    B43_PHY_HT_TSSIMODE_PDEN);
+ 	b43_phy_ht_cg3000_apply_fem(dev);
+ 
+-	/* TODO: Does it depend on sprom->fem.ghz2.tssipos? */
+-	b43_phy_set(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI, 0x4000);
++	if (b43_current_band(dev->wl) == NL80211_BAND_2GHZ &&
++	    sprom->fem.ghz2.tssipos)
++		b43_phy_set(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI, 0x4000);
++	else
++		b43_phy_mask(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI, ~0x4000);
++	if (b43_cg3000_4331_board(dev))
++		b43info(dev->wl, "CG3000 HTPHY tssipos=%u\n",
++			sprom->fem.ghz2.tssipos);
+ 
+ 	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C1,
+ 			~B43_PHY_HT_TXPCTL_CMD_C1_INIT, 0x19);

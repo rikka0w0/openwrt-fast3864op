@@ -1,0 +1,19 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -686,6 +686,16 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 			~B43_PHY_HT_TXPCTL_CMD_C2_INIT, 0x19);
+ 	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C3,
+ 			~B43_PHY_HT_TXPCTL_CMD_C3_INIT, 0x19);
++	if (b43_cg3000_4331_board(dev) && b43_modparam_cg3000_txpwr_idx >= 0) {
++		u16 txpwr_idx = b43_modparam_cg3000_txpwr_idx & 0x7f;
++
++		b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C1,
++				~B43_PHY_HT_TXPCTL_CMD_C1_INIT, txpwr_idx);
++		b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C2,
++				~B43_PHY_HT_TXPCTL_CMD_C2_INIT, txpwr_idx);
++		b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C3,
++				~B43_PHY_HT_TXPCTL_CMD_C3_INIT, txpwr_idx);
++	}
+ 
+ 	b43_phy_set(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI,
+ 		    B43_PHY_HT_TXPCTL_IDLE_TSSI_BINF);

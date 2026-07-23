@@ -1,0 +1,32 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -939,16 +939,23 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI2,
+ 			~B43_PHY_HT_TXPCTL_IDLE_TSSI2_C3,
+ 			idle[2] << B43_PHY_HT_TXPCTL_IDLE_TSSI2_C3_SHIFT);
+ 
+ 	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_N, ~B43_PHY_HT_TXPCTL_N_TSSID,
+-			0xf0);
++			b43_cg3000_4331_board(dev) ? 0x96 : 0xf0);
+ 	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_N, ~B43_PHY_HT_TXPCTL_N_NPTIL2,
+ 			0x3 << B43_PHY_HT_TXPCTL_N_NPTIL2_SHIFT);
+-#if 0
+-	/* TODO: what to mask/set? */
+-	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C1, 0x800, 0)
+-	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_CMD_C1, 0x400, 0)
+-#endif
++	if (b43_cg3000_4331_board(dev)) {
++		/*
++		 * The eCos BCM4331/BCM4332 HTPHY setup clears these C1
++		 * TXPCTL_CMD bits immediately after programming TXPCTL_N.
++		 */
++		b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1, ~0x0800);
++		b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1, ~0x0400);
++		b43info(dev->wl,
++			"CG3000 HTPHY matched eCos TXPCTL setup: n=0x%04x cmd_c1=0x%04x\n",
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_N),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C1));
++	}
+ 
+ 	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_TARG_PWR,
+ 			~B43_PHY_HT_TXPCTL_TARG_PWR_C1,

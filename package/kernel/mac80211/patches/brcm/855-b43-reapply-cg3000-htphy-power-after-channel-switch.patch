@@ -1,0 +1,49 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -2127,19 +2127,43 @@ static int b43_phy_ht_op_switch_channel
+ {
+ 	struct ieee80211_channel *channel = dev->wl->hw->conf.chandef.chan;
+ 	enum nl80211_channel_type channel_type =
+ 		cfg80211_get_chandef_type(&dev->wl->hw->conf.chandef);
++	struct b43_phy_ht *phy_ht = dev->phy.ht;
++	bool saved_tx_pwr_ctl;
++	int err;
+ 
+ 	if (b43_current_band(dev->wl) == NL80211_BAND_2GHZ) {
+ 		if ((new_channel < 1) || (new_channel > 14))
+ 			return -EINVAL;
+ 	} else {
+ 		return -EINVAL;
+ 	}
+ 
+-	return b43_phy_ht_set_channel(dev, channel, channel_type);
++	err = b43_phy_ht_set_channel(dev, channel, channel_type);
++	if (err)
++		return err;
++
++	if (!b43_cg3000_4331_board(dev))
++		return 0;
++
++	/*
++	 * b43 initializes HTPHY TX power while the PHY is still on its default
++	 * channel.  The CG3000 eCos path applies the board-specific HTPHY
++	 * TXPCTL/FEM/TSSI programming for the channel that is actually used.
++	 * Reapply the CG3000 2 GHz setup after a successful channel switch so
++	 * AP operation on channels other than 1 is not left with stale power
++	 * tables.
++	 */
++	saved_tx_pwr_ctl = phy_ht->tx_pwr_ctl;
++	b43_phy_ht_tx_power_ctl(dev, false);
++	b43_phy_ht_tx_power_ctl_setup(dev);
++	b43_phy_ht_tssi_setup(dev);
++	b43_phy_ht_tx_power_ctl(dev, saved_tx_pwr_ctl);
++
++	return 0;
+ }
+ 
+ static unsigned int b43_phy_ht_op_get_default_chan(struct b43_wldev *dev)
+ {
+ 	if (b43_current_band(dev->wl) == NL80211_BAND_2GHZ)
+ 		return 11;
+ 	return 36;
+ }

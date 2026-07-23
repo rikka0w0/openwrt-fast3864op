@@ -1,0 +1,263 @@
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -164,8 +164,65 @@ void b43_generate_plcp_hdr(struct b43_pl
+ 	}
+ }
+ 
++static const u8 b43_mcs_phy_ctl3[8] = {
++	0x00, 0x08, 0x0a, 0x10, 0x12, 0x19, 0x1a, 0x1c,
++};
++
++static const u8 b43_mcs_legacy_ofdm_rate[8] = {
++	B43_OFDM_RATE_6MB, B43_OFDM_RATE_12MB, B43_OFDM_RATE_18MB,
++	B43_OFDM_RATE_24MB, B43_OFDM_RATE_36MB, B43_OFDM_RATE_48MB,
++	B43_OFDM_RATE_54MB, B43_OFDM_RATE_54MB,
++};
++
++static const u16 b43_mcs_20_kbps[8] = {
++	6500, 13000, 19500, 26000, 39000, 52000, 58500, 65000,
++};
++
++static bool b43_tx_rate_is_mcs(const struct ieee80211_tx_rate *rate)
++{
++	return rate->idx >= 0 &&
++	       rate->idx < ARRAY_SIZE(b43_mcs_phy_ctl3) &&
++	       rate->flags & IEEE80211_TX_RC_MCS;
++}
++
++static u8 b43_tx_rate_mcs(const struct ieee80211_tx_rate *rate)
++{
++	if (!b43_tx_rate_is_mcs(rate))
++		return 0;
++
++	return rate->idx;
++}
++
++static void b43_generate_mimo_plcp_hdr(struct b43_plcp_hdr6 *plcp,
++				       u16 octets, u8 mcs)
++{
++	u8 *raw = plcp->raw;
++
++	memset(raw, 0, sizeof(plcp->raw));
++	raw[0] = mcs & 0x7f;
++	raw[1] = octets & 0xff;
++	raw[2] = octets >> 8;
++	raw[3] = 0x07;
++}
++
++static u16 b43_mimo_lsig_len(u16 octets, u8 mcs)
++{
++	u32 nsyms;
++	u32 kndps;
++
++	if (mcs >= ARRAY_SIZE(b43_mcs_20_kbps))
++		mcs = 0;
++
++	kndps = b43_mcs_20_kbps[mcs] * 4;
++	nsyms = DIV_ROUND_UP((16 + 8 * octets + 6) * 1000, kndps);
++	nsyms += 4;
++
++	return 3 * nsyms - 3;
++}
++
+ /* TODO: verify if needed for SSLPN or LCN  */
+-static u16 b43_generate_tx_phy_ctl1(struct b43_wldev *dev, u8 bitrate)
++static u16 b43_generate_tx_phy_ctl1_mcs(struct b43_wldev *dev, u8 bitrate,
++					bool mcs, u8 mcs_idx)
+ {
+ 	const struct b43_phy *phy = &dev->phy;
+ 	const struct b43_tx_legacy_rate_phy_ctl_entry *e;
+@@ -176,7 +236,9 @@ static u16 b43_generate_tx_phy_ctl1(stru
+ 	else /* FIXME */
+ 		bw = B43_TXH_PHY1_BW_20;
+ 
+-	if (0) { /* FIXME: MIMO */
++	if (mcs) {
++		control = bw;
++		control |= b43_mcs_phy_ctl3[mcs_idx] << 8;
+ 	} else if (b43_is_cck_rate(bitrate) && phy->type != B43_PHYTYPE_LP) {
+ 		control = bw;
+ 	} else {
+@@ -188,6 +250,12 @@ static u16 b43_generate_tx_phy_ctl1_mcs(
+ 
+ 	return control;
+ }
++
++static u16 b43_generate_tx_phy_ctl1(struct b43_wldev *dev, u8 bitrate)
++{
++	return b43_generate_tx_phy_ctl1_mcs(dev, bitrate, false, 0);
++}
++
+ 
+ static u8 b43_calc_fallback_rate(u8 bitrate, int gmode)
+ {
+@@ -295,6 +358,6 @@ int b43_generate_txhdr(struct b43_wldev
+ 	int use_encryption = !!info->control.hw_key;
+ 	__le16 fctl = wlhdr->frame_control;
+-	struct ieee80211_rate *fbrate;
++	struct ieee80211_rate *fbrate = NULL;
+ 	u8 rate, rate_fb;
+ 	int rate_ofdm, rate_fb_ofdm;
+ 	unsigned int plcp_fragment_len;
+@@ -305,19 +373,42 @@ int b43_generate_txhdr(struct b43_wldev
+ 				      phy->type == B43_PHYTYPE_N ||
+ 				      phy->type == B43_PHYTYPE_HT);
+ 	u8 extra_ft = 0;
+-	struct ieee80211_rate *txrate;
+-	struct ieee80211_tx_rate *rates;
++	struct ieee80211_rate *txrate = NULL;
++	struct ieee80211_tx_rate *rates = info->control.rates;
++	bool rate_mcs, rate_fb_mcs;
++	u8 mcs_idx, mcs_fb_idx;
+ 
+ 	memset(txhdr, 0, sizeof(*txhdr));
+ 
+-	txrate = ieee80211_get_tx_rate(dev->wl->hw, info);
+-	rate = txrate ? txrate->hw_value : B43_CCK_RATE_1MB;
++	rate_mcs = b43_tx_rate_is_mcs(&rates[0]);
++	mcs_idx = b43_tx_rate_mcs(&rates[0]);
++	rate_fb_mcs = b43_tx_rate_is_mcs(&rates[1]);
++	mcs_fb_idx = b43_tx_rate_mcs(&rates[1]);
++	if (rates[1].idx < 0) {
++		rate_fb_mcs = rate_mcs;
++		mcs_fb_idx = mcs_idx;
++	}
++
++	if (rate_mcs) {
++		rate = b43_mcs_legacy_ofdm_rate[mcs_idx];
++	} else {
++		txrate = ieee80211_get_tx_rate(dev->wl->hw, info);
++		rate = txrate ? txrate->hw_value : B43_CCK_RATE_1MB;
++	}
+ 	rate_ofdm = b43_is_ofdm_rate(rate);
+-	fbrate = ieee80211_get_alt_retry_rate(dev->wl->hw, info, 0) ? : txrate;
+-	rate_fb = fbrate->hw_value;
++	if (rate_fb_mcs) {
++		rate_fb = b43_mcs_legacy_ofdm_rate[mcs_fb_idx];
++	} else {
++		fbrate = ieee80211_get_alt_retry_rate(dev->wl->hw, info, 0);
++		if (!fbrate)
++			fbrate = txrate;
++		rate_fb = fbrate ? fbrate->hw_value : rate;
++	}
+ 	rate_fb_ofdm = b43_is_ofdm_rate(rate_fb);
+ 
+-	if (rate_ofdm)
++	if (rate_mcs)
++		txhdr->phy_rate = mcs_idx;
++	else if (rate_ofdm)
+ 		txhdr->phy_rate = b43_plcp_get_ratecode_ofdm(rate);
+ 	else
+ 		txhdr->phy_rate = b43_plcp_get_ratecode_cck(rate);
+@@ -322,9 +415,10 @@ int b43_generate_txhdr(struct b43_wldev
+ 	memcpy(txhdr->tx_receiver, wlhdr->addr1, ETH_ALEN);
+ 
+ 	/* Calculate duration for fallback rate */
+-	if ((rate_fb == rate) ||
++	if (rate_mcs || rate_fb_mcs ||
++	    (rate_fb == rate) ||
+ 	    (wlhdr->duration_id & cpu_to_le16(0x8000)) ||
+ 	    (wlhdr->duration_id == cpu_to_le16(0))) {
+ 		/* If the fallback rate equals the normal rate or the
+ 		 * dur_id field contains an AID, CFP magic or 0,
+ 		 * use the original dur_id field. */
+@@ -387,23 +476,41 @@ int b43_generate_txhdr(struct b43_wldev
+ 	}
+ 	switch (dev->fw.hdr_format) {
+ 	case B43_FW_HDR_598:
+-		b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->format_598.plcp),
+-				      plcp_fragment_len, rate);
++		if (rate_mcs)
++			b43_generate_mimo_plcp_hdr(&txhdr->format_598.plcp,
++						   plcp_fragment_len, mcs_idx);
++		else
++			b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->format_598.plcp),
++					      plcp_fragment_len, rate);
+ 		break;
+ 	case B43_FW_HDR_351:
+-		b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->format_351.plcp),
+-				      plcp_fragment_len, rate);
++		if (rate_mcs)
++			b43_generate_mimo_plcp_hdr(&txhdr->format_351.plcp,
++						   plcp_fragment_len, mcs_idx);
++		else
++			b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->format_351.plcp),
++					      plcp_fragment_len, rate);
+ 		break;
+ 	case B43_FW_HDR_410:
+-		b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->format_410.plcp),
+-				      plcp_fragment_len, rate);
++		if (rate_mcs)
++			b43_generate_mimo_plcp_hdr(&txhdr->format_410.plcp,
++						   plcp_fragment_len, mcs_idx);
++		else
++			b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->format_410.plcp),
++					      plcp_fragment_len, rate);
+ 		break;
+ 	}
+-	b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->plcp_fb),
+-			      plcp_fragment_len, rate_fb);
++	if (rate_fb_mcs)
++		b43_generate_mimo_plcp_hdr(&txhdr->plcp_fb,
++					   plcp_fragment_len, mcs_fb_idx);
++	else
++		b43_generate_plcp_hdr((struct b43_plcp_hdr4 *)(&txhdr->plcp_fb),
++				      plcp_fragment_len, rate_fb);
+ 
+ 	/* Extra Frame Types */
+-	if (rate_fb_ofdm)
++	if (rate_fb_mcs)
++		extra_ft |= B43_TXH_EFT_FB_HT;
++	else if (rate_fb_ofdm)
+ 		extra_ft |= B43_TXH_EFT_FB_OFDM;
+ 	else
+ 		extra_ft |= B43_TXH_EFT_FB_CCK;
+@@ -416,15 +520,16 @@ int b43_generate_txhdr(struct b43_wldev
+ 
+ 	/* PHY TX Control word */
+-	if (rate_ofdm)
++	if (rate_mcs)
++		phy_ctl |= B43_TXH_PHY_ENC_HT;
++	else if (rate_ofdm)
+ 		phy_ctl |= B43_TXH_PHY_ENC_OFDM;
+ 	else
+ 		phy_ctl |= B43_TXH_PHY_ENC_CCK;
+ 	if (info->control.rates[0].flags & IEEE80211_TX_RC_USE_SHORT_PREAMBLE)
+ 		phy_ctl |= B43_TXH_PHY_SHORTPRMBL;
+ 
+ 	phy_ctl |= b43_tx_antenna_phy_ctl(dev);
+ 
+-	rates = info->control.rates;
+ 	/* MAC control */
+ 	if (!(info->flags & IEEE80211_TX_CTL_NO_ACK))
+ 		mac_ctl |= B43_TXH_MAC_ACK;
+@@ -440,7 +546,8 @@ int b43_generate_txhdr(struct b43_wldev
+ 	 * in the tx status easier. need the actual retry limit to
+ 	 * detect whether the fallback rate was used.
+ 	 */
+-	if ((rates[0].flags & IEEE80211_TX_RC_USE_RTS_CTS) ||
++	if (rate_mcs || rate_fb_mcs ||
++	    (rates[0].flags & IEEE80211_TX_RC_USE_RTS_CTS) ||
+ 	    (rates[0].count <= dev->wl->hw->conf.long_frame_max_tx_count)) {
+ 		rates[0].count = dev->wl->hw->conf.long_frame_max_tx_count;
+ 		mac_ctl |= B43_TXH_MAC_LONGFRAME;
+@@ -584,10 +691,17 @@ int b43_generate_txhdr(struct b43_wldev
+ 
+ 	if (fill_phy_ctl1) {
+ 		txhdr->phy_ctl1 =
+-			cpu_to_le16(b43_generate_tx_phy_ctl1(dev, rate));
++			cpu_to_le16(b43_generate_tx_phy_ctl1_mcs(dev, rate,
++								 rate_mcs, mcs_idx));
+ 		txhdr->phy_ctl1_fb =
+-			cpu_to_le16(b43_generate_tx_phy_ctl1(dev, rate_fb));
++			cpu_to_le16(b43_generate_tx_phy_ctl1_mcs(dev, rate_fb,
++								 rate_fb_mcs,
++								 mcs_fb_idx));
+ 	}
++	if (rate_mcs)
++		txhdr->mimo_modelen = cpu_to_le16(b43_mimo_lsig_len(plcp_fragment_len, mcs_idx));
++	if (rate_fb_mcs)
++		txhdr->mimo_ratelen_fb = cpu_to_le16(b43_mimo_lsig_len(plcp_fragment_len, mcs_fb_idx));
+ 
+ 	/* Apply the bitfields */
+ 	txhdr->mac_ctl = cpu_to_le32(mac_ctl);

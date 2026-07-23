@@ -1,0 +1,56 @@
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -93,6 +93,19 @@ static int b43_plcp_get_bitrate_idx_ofd
+ 	return -1;
+ }
+ 
++#define B43_MIMO_PLCP_MCS_MASK		0x7f
++#define B43_MIMO_PLCP_40MHZ		0x80
++#define B43_MIMO_PLCP3_SHORT_GI		0x80
++
++static int b43_plcp_get_bitrate_idx_mcs(struct b43_plcp_hdr6 *plcp)
++{
++	int mcs = plcp->raw[0] & B43_MIMO_PLCP_MCS_MASK;
++
++	if (mcs > 31)
++		return -1;
++	return mcs;
++}
++
+ u8 b43_plcp_get_ratecode_cck(const u8 bitrate)
+ {
+ 	switch (bitrate) {
+@@ -893,11 +906,31 @@ void b43_rx(struct b43_wldev *dev, stru
+ 		break;
+ 	}
+ 
+-	if (phystat0 & B43_RX_PHYST0_OFDM)
++	switch (phystat0 & B43_RX_PHYST0_FTYPE) {
++	case B43_RX_PHYST0_PRE_N:
++	case B43_RX_PHYST0_STD_N:
++		/*
++		 * brcmsmac decodes PRE-N MIMO PLCP raw[0] as the MCS index,
++		 * raw[0].7 as 40 MHz, and raw[3].7 as short GI.  The CG3000
++		 * BCM4331/HTPHY AP data path receives client HT frames here;
++		 * treating them as legacy OFDM/CCK makes b43 drop them as
++		 * corrupted PLCP before mac80211 can deliver them.
++		 */
++		rate_idx = b43_plcp_get_bitrate_idx_mcs(plcp);
++		status.encoding = RX_ENC_HT;
++		status.bw = (plcp->raw[0] & B43_MIMO_PLCP_40MHZ) ?
++			    RATE_INFO_BW_40 : RATE_INFO_BW_20;
++		if (plcp->raw[3] & B43_MIMO_PLCP3_SHORT_GI)
++			status.enc_flags |= RX_ENC_FLAG_SHORT_GI;
++		break;
++	case B43_RX_PHYST0_OFDM:
+ 		rate_idx = b43_plcp_get_bitrate_idx_ofdm(plcp,
+ 					!!(chanstat & B43_RX_CHAN_5GHZ));
+-	else
++		break;
++	default:
+ 		rate_idx = b43_plcp_get_bitrate_idx_cck(plcp);
++		break;
++	}
+ 	if (unlikely(rate_idx == -1)) {
+ 		/* PLCP seems to be corrupted.
+ 		 * Drop the frame, if we are not interested in corrupted frames. */

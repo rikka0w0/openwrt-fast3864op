@@ -1,0 +1,95 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -664,6 +664,84 @@ static void b43_phy_ht_update_ucode_txpo
+ 		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_CUR));
+ }
+ 
++static void b43_phy_ht_cg3000_apply_triso(struct b43_wldev *dev)
++{
++	static const u16 triso_regs[] = { 0x0037, 0x02ad, 0x0038, 0x02ae, 0x0169 };
++	static const u16 triso_values[][ARRAY_SIZE(triso_regs)] = {
++		{ 0x0068, 0x0068, 0x0008, 0x0008, 0x1202 },
++		{ 0x0068, 0x0068, 0x0018, 0x0018, 0x1502 },
++		{ 0x0070, 0x0070, 0x0018, 0x0018, 0x1902 },
++		{ 0x0070, 0x0070, 0x0118, 0x0118, 0x1c02 },
++		{ 0x0070, 0x0070, 0x0218, 0x0218, 0x1f02 },
++		{ 0x0070, 0x0070, 0x0318, 0x0318, 0x2202 },
++		{ 0x0070, 0x0070, 0x0418, 0x0418, 0x2502 },
++		{ 0x0070, 0x0070, 0x0518, 0x0518, 0x2802 },
++	};
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
++	u8 triso = sprom->fem.ghz2.tr_iso;
++	int i;
++
++	if (b43_current_band(dev->wl) != NL80211_BAND_2GHZ)
++		return;
++
++	if (triso >= ARRAY_SIZE(triso_values))
++		triso = 2;
++
++	for (i = 0; i < ARRAY_SIZE(triso_regs); i++)
++		b43_phy_write(dev, triso_regs[i], triso_values[triso][i]);
++
++	b43info(dev->wl, "CG3000 HTPHY triso=%u applied\n",
++		sprom->fem.ghz2.tr_iso);
++}
++
++static void b43_phy_ht_cg3000_apply_pdet_range(struct b43_wldev *dev)
++{
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
++	static const u16 pdet_range3_vmid[] = {
++		0x0096, 0x0096, 0x0096,
++	};
++	static const u16 pdet_range3_gain[] = {
++		0x0000, 0x0000, 0x0000,
++	};
++	int core;
++
++	if (b43_current_band(dev->wl) != NL80211_BAND_2GHZ)
++		return;
++
++	if (sprom->fem.ghz2.pdet_range != 3)
++		return;
++
++	for (core = 0; core < 3; core++) {
++		b43_httab_write(dev, B43_HTTAB16(8, 0x0b + core * 0x10),
++				pdet_range3_vmid[core]);
++		b43_httab_write(dev, B43_HTTAB16(8, 0x0f + core * 0x10),
++				pdet_range3_gain[core]);
++	}
++
++	b43info(dev->wl, "CG3000 HTPHY pdet_range=3 table applied\n");
++}
++
++static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)
++{
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
++
++	if (!b43_cg3000_4331_board(dev))
++		return;
++
++	/*
++	 * The proprietary BCM4331/BCM4332 HTPHY path uses the 2 GHz FEM
++	 * fields from SPROM rev 9.  On CG3000-2STAUS the observed values are
++	 * pdet_range=3, tr_iso=3 and antswlut=0.  The antswlut path is
++	 * intentionally left untouched here: eCos only writes HTPHY table 9
++	 * for non-zero antswlut values, while this board reports zero.
++	 */
++	b43_phy_ht_cg3000_apply_pdet_range(dev);
++	b43_phy_ht_cg3000_apply_triso(dev);
++	if (sprom->fem.ghz2.antswlut)
++		b43info(dev->wl, "CG3000 HTPHY antswlut=%u is not implemented\n",
++			sprom->fem.ghz2.antswlut);
++}
++
+ static void b43_phy_ht_tx_power_ctl_setup(struct b43_wldev *dev)
+ {
+ 	struct b43_phy_ht *phy_ht = dev->phy.ht;
+@@ -717,6 +795,7 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 	if (b43_cg3000_4331_board(dev) && sprom->fem.ghz2.pdet_range)
+ 		b43_phy_set(dev, B43_PHY_HT_TSSIMODE,
+ 			    B43_PHY_HT_TSSIMODE_PDEN);
++	b43_phy_ht_cg3000_apply_fem(dev);
+ 
+ 	/* TODO: Does it depend on sprom->fem.ghz2.tssipos? */
+ 	b43_phy_set(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI, 0x4000);

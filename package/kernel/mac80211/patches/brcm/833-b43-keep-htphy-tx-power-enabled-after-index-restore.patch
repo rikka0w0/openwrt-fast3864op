@@ -1,0 +1,11 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -567,6 +567,8 @@ static void b43_phy_ht_tx_power_ctl(stru
+ 			    B43_PHY_HT_TXPCTL_CMD_C1_INIT)
+ 				b43_phy_write(dev, cmd_regs[i],
+ 					      phy_ht->tx_pwr_idx[i]);
++		for (i = 0; i < 3; i++)
++			b43_phy_set(dev, cmd_regs[i], en_bits);
+ 	}
+ 
+ 	phy_ht->tx_pwr_ctl = enable;

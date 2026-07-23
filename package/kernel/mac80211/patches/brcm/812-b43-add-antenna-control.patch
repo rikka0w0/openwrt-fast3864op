@@ -42,7 +42,7 @@
  
  	if (wl->radio_enabled != phy->radio_on) {
  		if (wl->radio_enabled) {
-@@ -5178,6 +5175,49 @@ static int b43_op_get_survey(struct ieee
+@@ -5178,6 +5175,55 @@ static int b43_op_get_survey(struct ieee
  	return 0;
  }
  
@@ -60,7 +60,11 @@
 +		dev->tx_antenna = B43_ANTENNA1;
 +		dev->rx_antenna = B43_ANTENNA1;
 +	}
-+	else if ((tx_ant & 3) == 3 && (rx_ant & 3) == 3) {
++	else if (tx_ant == 4 && rx_ant == 4) {
++		dev->tx_antenna = B43_ANTENNA2;
++		dev->rx_antenna = B43_ANTENNA2;
++	}
++	else if ((tx_ant & 7) == 7 && (rx_ant & 7) == 7) {
 +		dev->tx_antenna = B43_ANTENNA_DEFAULT;
 +		dev->rx_antenna = B43_ANTENNA_DEFAULT;
 +	}
@@ -83,8 +87,10 @@
 +		*tx_ant = 1; *rx_ant = 1; break;
 +	case B43_ANTENNA1:
 +		*tx_ant = 2; *rx_ant = 2; break;
++	case B43_ANTENNA2:
++		*tx_ant = 4; *rx_ant = 4; break;
 +	case B43_ANTENNA_DEFAULT:
-+		*tx_ant = 3; *rx_ant = 3; break;
++		*tx_ant = 7; *rx_ant = 7; break;
 +	}
 +	return 0;
 +}
@@ -114,8 +120,8 @@
  
  	wiphy_ext_feature_set(hw->wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
  
-+	hw->wiphy->available_antennas_rx = 0x3;
-+	hw->wiphy->available_antennas_tx = 0x3;
++	hw->wiphy->available_antennas_rx = 0x7;
++	hw->wiphy->available_antennas_tx = 0x7;
 +
  	wl->hw_registered = false;
  	hw->max_rates = 2;
@@ -131,3 +137,66 @@
  
  	/* PHY/Radio device. */
  	struct b43_phy phy;
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -167,6 +167,33 @@ static u16 b43_generate_tx_phy_ctl1(stru
+ 	return control;
+ }
+ 
++static u16 b43_tx_antenna_phy_ctl(struct b43_wldev *dev)
++{
++	u8 antenna_mask;
++
++	if (dev->phy.gmode)
++		antenna_mask = dev->dev->bus_sprom->ant_available_bg;
++	else
++		antenna_mask = dev->dev->bus_sprom->ant_available_a;
++
++	switch (dev->tx_antenna) {
++	case B43_ANTENNA0:
++		return (antenna_mask & BIT(0)) ? B43_TXH_PHY_ANT0 :
++						 B43_TXH_PHY_ANT01AUTO;
++	case B43_ANTENNA1:
++		return (antenna_mask & BIT(1)) ? B43_TXH_PHY_ANT1 :
++						 B43_TXH_PHY_ANT01AUTO;
++	case B43_ANTENNA2:
++		return (antenna_mask & BIT(2)) ? B43_TXH_PHY_ANT2 :
++						 B43_TXH_PHY_ANT01AUTO;
++	case B43_ANTENNA3:
++		return (antenna_mask & BIT(3)) ? B43_TXH_PHY_ANT3 :
++						 B43_TXH_PHY_ANT01AUTO;
++	default:
++		return B43_TXH_PHY_ANT01AUTO;
++	}
++}
++
+ static u8 b43_calc_fallback_rate(u8 bitrate, int gmode)
+ {
+ 	switch (bitrate) {
+@@ -374,25 +399,7 @@ int b43_generate_txhdr(struct b43_wldev
+ 	if (info->control.rates[0].flags & IEEE80211_TX_RC_USE_SHORT_PREAMBLE)
+ 		phy_ctl |= B43_TXH_PHY_SHORTPRMBL;
+ 
+-	switch (b43_ieee80211_antenna_sanitize(dev, 0)) {
+-	case 0: /* Default */
+-		phy_ctl |= B43_TXH_PHY_ANT01AUTO;
+-		break;
+-	case 1: /* Antenna 0 */
+-		phy_ctl |= B43_TXH_PHY_ANT0;
+-		break;
+-	case 2: /* Antenna 1 */
+-		phy_ctl |= B43_TXH_PHY_ANT1;
+-		break;
+-	case 3: /* Antenna 2 */
+-		phy_ctl |= B43_TXH_PHY_ANT2;
+-		break;
+-	case 4: /* Antenna 3 */
+-		phy_ctl |= B43_TXH_PHY_ANT3;
+-		break;
+-	default:
+-		B43_WARN_ON(1);
+-	}
++	phy_ctl |= b43_tx_antenna_phy_ctl(dev);
+ 
+ 	rates = info->control.rates;
+ 	/* MAC control */

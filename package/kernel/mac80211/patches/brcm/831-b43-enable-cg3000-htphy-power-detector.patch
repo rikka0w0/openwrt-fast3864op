@@ -1,0 +1,12 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -671,6 +671,9 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 	b43_phy_set(dev, B43_PHY_HT_TSSIMODE, B43_PHY_HT_TSSIMODE_EN);
+ 	b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1,
+ 		     ~B43_PHY_HT_TXPCTL_CMD_C1_PCTLEN & 0xFFFF);
++	if (b43_cg3000_4331_board(dev) && sprom->fem.ghz2.pdet_range)
++		b43_phy_set(dev, B43_PHY_HT_TSSIMODE,
++			    B43_PHY_HT_TSSIMODE_PDEN);
+ 
+ 	/* TODO: Does it depend on sprom->fem.ghz2.tssipos? */
+ 	b43_phy_set(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI, 0x4000);

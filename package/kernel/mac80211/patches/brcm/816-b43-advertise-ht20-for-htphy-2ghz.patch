@@ -1,0 +1,96 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -367,6 +367,42 @@ static struct ieee80211_supported_band b
+ 	.n_bitrates	= b43_g_ratetable_size,
+ };
+ 
++static struct ieee80211_supported_band b43_band_2GHz_ht = {
++	.band		= NL80211_BAND_2GHZ,
++	.channels	= b43_2ghz_chantable,
++	.n_channels	= ARRAY_SIZE(b43_2ghz_chantable),
++	.bitrates	= b43_g_ratetable,
++	.n_bitrates	= b43_g_ratetable_size,
++	.ht_cap		= {
++		.ht_supported	= true,
++		.cap		= IEEE80211_HT_CAP_SGI_20,
++		.ampdu_factor	= IEEE80211_HT_MAX_AMPDU_64K,
++		.ampdu_density	= 0,
++		.mcs		= {
++			.rx_mask	= { 0xff },
++			.tx_params	= IEEE80211_HT_MCS_TX_DEFINED,
++		},
++	},
++};
++
++static struct ieee80211_supported_band b43_band_2ghz_ht_limited = {
++	.band		= NL80211_BAND_2GHZ,
++	.channels	= b43_2ghz_chantable,
++	.n_channels	= b43_2ghz_chantable_limited_size,
++	.bitrates	= b43_g_ratetable,
++	.n_bitrates	= b43_g_ratetable_size,
++	.ht_cap		= {
++		.ht_supported	= true,
++		.cap		= IEEE80211_HT_CAP_SGI_20,
++		.ampdu_factor	= IEEE80211_HT_MAX_AMPDU_64K,
++		.ampdu_density	= 0,
++		.mcs		= {
++			.rx_mask	= { 0xff },
++			.tx_params	= IEEE80211_HT_MCS_TX_DEFINED,
++		},
++	},
++};
++
+ static void b43_wireless_core_exit(struct b43_wldev *dev);
+ static int b43_wireless_core_init(struct b43_wldev *dev);
+ static struct b43_wldev * b43_wireless_core_stop(struct b43_wldev *dev);
+@@ -2630,6 +2666,7 @@ start_ieee80211:
+ 	wl->hw->queues = B43_QOS_QUEUE_NUM;
+ 	if (!modparam_qos || dev->fw.opensource ||
+-	    dev->dev->chip_id == BCMA_CHIP_ID_BCM4331)
++	    (dev->dev->chip_id == BCMA_CHIP_ID_BCM4331 &&
++	     dev->phy.type != B43_PHYTYPE_HT))
+ 		wl->hw->queues = 1;
+ 
+ 	err = ieee80211_register_hw(wl->hw);
+@@ -5208,6 +5245,13 @@ static int b43_op_get_antenna(struct iee
+ 	return 0;
+ }
+ 
++static int b43_op_ampdu_action(struct ieee80211_hw *hw,
++			       struct ieee80211_vif *vif,
++			       struct ieee80211_ampdu_params *params)
++{
++	return -EOPNOTSUPP;
++}
++
+ static const struct ieee80211_ops b43_hw_ops = {
+ 	.add_chanctx = ieee80211_emulate_add_chanctx,
+ 	.remove_chanctx = ieee80211_emulate_remove_chanctx,
+@@ -5245,6 +5290,7 @@ static const struct ieee80211_ops b43_hw
+ 	.rfkill_poll		= b43_rfkill_poll,
+ 	.set_antenna		= b43_op_set_antenna,
+ 	.get_antenna		= b43_op_get_antenna,
++	.ampdu_action		= b43_op_ampdu_action,
+ };
+ 
+ /* Hard-reset the chip. Do not call this directly.
+@@ -5330,9 +5367,16 @@ static int b43_setup_bands(struct b43_wl
+ 	limited_5g = phy->radio_ver == 0x2057 &&
+ 		     phy->radio_rev == 9;
+ 
+-	if (have_2ghz_phy)
+-		hw->wiphy->bands[NL80211_BAND_2GHZ] = limited_2g ?
+-			&b43_band_2ghz_limited : &b43_band_2GHz;
++	if (have_2ghz_phy) {
++		if (dev->phy.type == B43_PHYTYPE_HT)
++			hw->wiphy->bands[NL80211_BAND_2GHZ] = limited_2g ?
++				&b43_band_2ghz_ht_limited :
++				&b43_band_2GHz_ht;
++		else
++			hw->wiphy->bands[NL80211_BAND_2GHZ] = limited_2g ?
++				&b43_band_2ghz_limited :
++				&b43_band_2GHz;
++	}
+ 	if (dev->phy.type == B43_PHYTYPE_N) {
+ 		if (have_5ghz_phy)
+ 			hw->wiphy->bands[NL80211_BAND_5GHZ] = limited_5g ?

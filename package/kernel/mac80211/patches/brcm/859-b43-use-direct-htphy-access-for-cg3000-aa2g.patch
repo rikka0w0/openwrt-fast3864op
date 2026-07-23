@@ -1,0 +1,67 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -1548,6 +1548,9 @@ static void b43_phy_ht_cg3000_apply_aa2
+ {
+ 	u8 aa2g;
+ 	u16 hostf5;
++	u16 before410;
++	u16 before4b0;
++	u16 before4b1;
+ 
+ 	if (!b43_cg3000_4331_board(dev))
+ 		return;
+@@ -1566,24 +1569,28 @@ static void b43_phy_ht_cg3000_apply_aa2
+ 	hostf5 = b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5);
+ 	hostf5 &= ~B43_HF5_CG3000_AA2G3;
+ 
++	before410 = b43_phy_ht_cg3000_phy_read_direct(dev, 0x0410);
++	before4b0 = b43_phy_ht_cg3000_phy_read_direct(dev, 0x04b0);
++	before4b1 = b43_phy_ht_cg3000_phy_read_direct(dev, 0x04b1);
++
+ 	switch (aa2g) {
+ 	case 1:
+-		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0000);
+-		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0000);
+-		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
+-		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0000);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x0410, ~0x0002, 0x0000);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x0410, ~0x0001, 0x0000);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04b0, ~0x0020, 0x0020);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04b1, ~0x0200, 0x0000);
+ 		break;
+ 	case 2:
+-		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0000);
+-		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0001);
+-		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
+-		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0200);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x0410, ~0x0002, 0x0000);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x0410, ~0x0001, 0x0001);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04b0, ~0x0020, 0x0020);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04b1, ~0x0200, 0x0200);
+ 		break;
+ 	case 3:
+-		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0002);
+-		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0000);
+-		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
+-		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0000);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x0410, ~0x0002, 0x0002);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x0410, ~0x0001, 0x0000);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04b0, ~0x0020, 0x0020);
++		b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04b1, ~0x0200, 0x0000);
+ 		hostf5 |= B43_HF5_CG3000_AA2G3;
+ 		break;
+ 	default:
+@@ -1596,8 +1603,10 @@ static void b43_phy_ht_cg3000_apply_aa2
+ 	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5, hostf5);
+ 
+ 	b43info(dev->wl,
+-		"CG3000 HTPHY aa2g=%u applied: phy410=0x%04x phy4b0=0x%04x phy4b1=0x%04x hostf5=0x%04x\n",
+-		aa2g, b43_phy_read(dev, 0x0410), b43_phy_read(dev, 0x04b0),
+-		b43_phy_read(dev, 0x04b1),
++		"CG3000 HTPHY aa2g=%u direct: before=%04x/%04x/%04x after=%04x/%04x/%04x hostf5=0x%04x\n",
++		aa2g, before410, before4b0, before4b1,
++		b43_phy_ht_cg3000_phy_read_direct(dev, 0x0410),
++		b43_phy_ht_cg3000_phy_read_direct(dev, 0x04b0),
++		b43_phy_ht_cg3000_phy_read_direct(dev, 0x04b1),
+ 		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5));
+ }

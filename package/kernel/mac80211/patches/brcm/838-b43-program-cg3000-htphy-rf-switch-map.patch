@@ -1,0 +1,316 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -721,25 +721,306 @@ static void b43_phy_ht_cg3000_apply_pde
+ 	b43info(dev->wl, "CG3000 HTPHY pdet_range=3 table applied\n");
+ }
+ 
++static u8 b43_phy_ht_cg3000_swctrlmap_byte(const u32 map[5],
++					   unsigned int offset)
++{
++	u32 word = map[offset / 4];
++
++	return (word >> (8 * (3 - (offset % 4)))) & 0xff;
++}
++
++static u8 b43_phy_ht_cg3000_swctrlmap_low(const u32 map[5], bool path,
++					  unsigned int index)
++{
++	unsigned int offset = index * 4;
++
++	return b43_phy_ht_cg3000_swctrlmap_byte(map, offset + (path ? 0 : 1));
++}
++
++static u8 b43_phy_ht_cg3000_swctrlmap_high(const u32 map[5], bool path,
++					   unsigned int index)
++{
++	unsigned int offset = index * 4;
++
++	return b43_phy_ht_cg3000_swctrlmap_byte(map, offset + (path ? 2 : 3));
++}
++
++static u16 b43_phy_ht_cg3000_swctrlmap_flags(const u32 map[5])
++{
++	return b43_phy_ht_cg3000_swctrlmap_byte(map, 18) << 8 |
++	       b43_phy_ht_cg3000_swctrlmap_byte(map, 19);
++}
++
++#define B43_PHY_HT_RFSEQ_TABLE_ADDR		0x455
++#define B43_PHY_HT_RFSEQ_TABLE_DATALO		0x456
++#define B43_PHY_HT_RFSEQ_TABLE_DATAHI		0x457
++
++static int b43_modparam_cg3000_rfseq_route;
++module_param_named(cg3000_rfseq_route, b43_modparam_cg3000_rfseq_route,
++		   int, 0644);
++MODULE_PARM_DESC(cg3000_rfseq_route,
++		 "CG3000 RF-sequencer PHY register route: 0=raw, 1=EXTG, 2=OFDM, 3=HTTAB");
++
++static bool b43_modparam_cg3000_swctrlmap = true;
++module_param_named(cg3000_swctrlmap, b43_modparam_cg3000_swctrlmap,
++		   bool, 0644);
++MODULE_PARM_DESC(cg3000_swctrlmap,
++		 "Program CG3000-2STAUS eCos swctrlmap_2g RF switch table");
++
++static int b43_modparam_cg3000_swctrlmap_variant;
++module_param_named(cg3000_swctrlmap_variant,
++		   b43_modparam_cg3000_swctrlmap_variant, int, 0644);
++MODULE_PARM_DESC(cg3000_swctrlmap_variant,
++		 "CG3000-2STAUS eCos swctrlmap_2g variant: 0=extpa/boardrev default, 1=later 5357-family default, 2=fallback default");
++
++static u16 b43_phy_ht_cg3000_route_reg(u16 reg)
++{
++	switch (b43_modparam_cg3000_rfseq_route) {
++	case 1:
++		return B43_PHY_EXTG(reg);
++	case 2:
++		return B43_PHY_OFDM(reg);
++	default:
++		return reg;
++	}
++}
++
++static void b43_phy_ht_cg3000_phy_write_direct(struct b43_wldev *dev,
++					       u16 reg, u16 value)
++{
++	b43_phy_write(dev, b43_phy_ht_cg3000_route_reg(reg), value);
++}
++
++static u16 b43_phy_ht_cg3000_phy_read_direct(struct b43_wldev *dev, u16 reg)
++{
++	return b43_phy_read(dev, b43_phy_ht_cg3000_route_reg(reg));
++}
++
++static void b43_phy_ht_cg3000_phy_maskset_direct(struct b43_wldev *dev,
++						 u16 reg, u16 mask, u16 set)
++{
++	u16 routed = b43_phy_ht_cg3000_route_reg(reg);
++
++	b43_write16f(dev, B43_MMIO_PHY_CONTROL, routed);
++	b43_write16(dev, B43_MMIO_PHY_DATA,
++		    (b43_read16(dev, B43_MMIO_PHY_DATA) & mask) | set);
++	dev->phy.writes_counter = 1;
++}
++
++static u16 b43_phy_ht_cg3000_rfseq_tab_read16(struct b43_wldev *dev,
++					      unsigned int table_id,
++					      unsigned int offset)
++{
++	b43_phy_ht_cg3000_phy_write_direct(dev, B43_PHY_HT_RFSEQ_TABLE_ADDR,
++					   (table_id << 10) | offset);
++	return b43_phy_ht_cg3000_phy_read_direct(dev,
++						 B43_PHY_HT_RFSEQ_TABLE_DATALO);
++}
++
++static u16 b43_phy_ht_cg3000_rfseq_tab_stream_read16(struct b43_wldev *dev)
++{
++	return b43_phy_ht_cg3000_phy_read_direct(dev,
++						 B43_PHY_HT_RFSEQ_TABLE_DATALO);
++}
++
++static void b43_phy_ht_cg3000_rfseq_tab_stream_write16(struct b43_wldev *dev,
++						       u16 value)
++{
++	b43_phy_ht_cg3000_phy_write_direct(dev,
++					   B43_PHY_HT_RFSEQ_TABLE_DATALO,
++					   value);
++	/*
++	 * b43_phy_write() inserts a PHY_VER read after 24 consecutive PCI PHY
++	 * writes.  eCos streams RFSEQ table data through this auto-incrementing
++	 * window, so keep the b43 write watchdog quiet while the stream is
++	 * active.
++	 */
++	dev->phy.writes_counter = 0;
++}
++
++static void b43_phy_ht_cg3000_write_rf_switch_table(struct b43_wldev *dev,
++						    const u16 table[64])
++{
++	unsigned int i;
++
++	if (b43_modparam_cg3000_rfseq_route == 3) {
++		u16 read0, read16, read32, read63;
++
++		b43_httab_write_bulk(dev, B43_HTTAB16(15, 0), 64, table);
++		read0 = b43_httab_read(dev, B43_HTTAB16(15, 0));
++		read16 = b43_httab_read(dev, B43_HTTAB16(15, 16));
++		read32 = b43_httab_read(dev, B43_HTTAB16(15, 32));
++		read63 = b43_httab_read(dev, B43_HTTAB16(15, 63));
++		b43info(dev->wl,
++			"CG3000 HTPHY RF switch HTTAB write: expected=%04x/%04x/%04x/%04x read=%04x/%04x/%04x/%04x\n",
++			table[0], table[16], table[32], table[63],
++			read0, read16, read32, read63);
++		return;
++	}
++
++	/*
++	 * eCos MCP_iHtPhyProgramRfSwitchControl uploads RF switch table 15
++	 * through the RF-sequencer table window at raw PHY registers
++	 * 0x455/0x456/0x457, not the generic HTPHY table window used by
++	 * b43_httab_write_bulk().  Do not wrap these raw register numbers
++	 * in B43_PHY_EXTG().
++	 *
++	 * eCos streams the table through data-low after one address write.
++	 * Mirror that sequence and reset writes_counter after every streamed
++	 * data write so b43 does not inject an unrelated PHY_VER read into the
++	 * auto-incrementing RFSEQ table window.
++	 */
++	b43_phy_ht_cg3000_phy_write_direct(dev, B43_PHY_HT_RFSEQ_TABLE_ADDR,
++					   (15 << 10));
++	for (i = 0; i < 64; i++)
++		b43_phy_ht_cg3000_rfseq_tab_stream_write16(dev, table[i]);
++}
++
++static void b43_phy_ht_cg3000_build_rf_switch_table(const u32 map[5],
++						    const u32 extmap[5],
++						    u16 table[64])
++{
++	u16 flags = b43_phy_ht_cg3000_swctrlmap_flags(map);
++	bool skip_lower_on_tx = flags & 0x0100;
++	bool force_path_from_flags = flags & 0x0200;
++	bool forced_path = flags & 0x0400;
++	unsigned int state;
++
++	for (state = 0; state < 64; state++) {
++		bool path = state & 0x1;
++		u16 value = 0;
++
++		if (state & 0x10) {
++			if (force_path_from_flags)
++				path = forced_path;
++
++			if (state & 0x08) {
++				value = b43_phy_ht_cg3000_swctrlmap_byte(map, 13) |
++					b43_phy_ht_cg3000_swctrlmap_byte(extmap, 13) << 8;
++			} else if (state & 0x20) {
++				value = b43_phy_ht_cg3000_swctrlmap_byte(map, 14) |
++					b43_phy_ht_cg3000_swctrlmap_byte(extmap, 14) << 8;
++			} else {
++				value = b43_phy_ht_cg3000_swctrlmap_byte(map, 15) |
++					b43_phy_ht_cg3000_swctrlmap_byte(extmap, 15) << 8;
++			}
++		}
++
++		if (skip_lower_on_tx && (state & 0x10)) {
++			table[state] = value;
++			continue;
++		}
++
++		if (!(state & 0x04)) {
++			if (state & 0x20) {
++				unsigned int index = (state & 0x02) ? 1 : 2;
++
++				value |= b43_phy_ht_cg3000_swctrlmap_low(map, path, index) |
++					 b43_phy_ht_cg3000_swctrlmap_low(extmap, path, index) << 8;
++			} else {
++				unsigned int index = (state & 0x02) ? 1 : 2;
++
++				value |= b43_phy_ht_cg3000_swctrlmap_high(map, path, index) |
++					 b43_phy_ht_cg3000_swctrlmap_high(extmap, path, index) << 8;
++			}
++		} else if (state & 0x02) {
++			value |= b43_phy_ht_cg3000_swctrlmap_low(map, path, 0) |
++				 b43_phy_ht_cg3000_swctrlmap_low(extmap, path, 0) << 8;
++		} else {
++			value |= b43_phy_ht_cg3000_swctrlmap_high(map, path, 0) |
++				 b43_phy_ht_cg3000_swctrlmap_high(extmap, path, 0) << 8;
++		}
++
++		table[state] = value;
++	}
++}
++
++static void b43_phy_ht_cg3000_apply_rf_switch_map(struct b43_wldev *dev)
++{
++	static const u32 swctrlmap_2g_variants[][5] = {
++		/*
++		 * These are the three default swctrlmap_2g branches observed
++		 * in eCos MCP_iWlHtphyParseInitvars().  The board-specific
++		 * SPROM path can also override swctrlmap_2g explicitly; the
++		 * CG3000-2STAUS SPROM dump currently does not expose one.
++		 */
++		{ 100795906, 201853960, 67109888, 0x00080808, 1791 },
++		{ 67109888, 201853960, 67109888, 0x00080808, 1791 },
++		{ 151652618, 84280582, 151652618, 0x00060606, 1791 },
++	};
++	static const u32 swctrlmapext_2g[5] = { 0 };
++	const u32 *swctrlmap_2g = swctrlmap_2g_variants[0];
++	int variant = b43_modparam_cg3000_swctrlmap_variant;
++	u16 table[64];
++	u16 rf_control;
++	u16 ctl_before;
++	u16 ctl_after;
++	u16 ctl_b43;
++
++	if (b43_current_band(dev->wl) != NL80211_BAND_2GHZ)
++		return;
++
++	if (!b43_modparam_cg3000_swctrlmap) {
++		b43info(dev->wl,
++			"CG3000 HTPHY RF switch map skipped: cg3000_swctrlmap=0\n");
++		return;
++	}
++
++	if (variant >= 0 && variant < ARRAY_SIZE(swctrlmap_2g_variants))
++		swctrlmap_2g = swctrlmap_2g_variants[variant];
++	else
++		variant = 0;
++
++	b43_phy_ht_cg3000_build_rf_switch_table(swctrlmap_2g, swctrlmapext_2g,
++						table);
++	rf_control = b43_phy_ht_cg3000_swctrlmap_byte(swctrlmap_2g, 19) |
++		     b43_phy_ht_cg3000_swctrlmap_byte(swctrlmapext_2g, 19) << 8;
++
++	/*
++	 * eCos MCP_iHtPhyProgramRfSwitchControl writes PHY 0x4e2[10:0]
++	 * from swctrlmap byte 19 and uploads the expanded map to HTPHY
++	 * table 15.  eCos MCP_iWlHtphyParseInitvars selects the 2 GHz
++	 * extpagain2g default swctrlmap_2g above.  No default
++	 * swctrlmapext_2g write was observed in the eCos path for this board.
++	 * Keep swctrlmapext_2g empty to match that path.
++	 */
++	ctl_before = b43_phy_ht_cg3000_phy_read_direct(dev, 0x04e2);
++	b43_phy_ht_cg3000_phy_maskset_direct(dev, 0x04e2, ~0x07ff, rf_control);
++	ctl_after = b43_phy_ht_cg3000_phy_read_direct(dev, 0x04e2);
++	ctl_b43 = b43_phy_read(dev, 0x04e2);
++	b43_phy_ht_cg3000_write_rf_switch_table(dev, table);
++	if (dev->phy.rev >= 4)
++		b43_phy_set(dev, 0x044f, 0x2000);
++	b43_phy_ht_cg3000_phy_write_direct(dev, B43_PHY_HT_RFSEQ_TABLE_ADDR,
++					   (15 << 10));
++	b43info(dev->wl,
++		"CG3000 HTPHY RF switch map applied: variant=%d route=%d map=%08x/%08x/%08x/%08x/%08x ctl_before=0x%04x rf_control=0x%04x ctl_after=0x%04x ctl_b43=0x%04x expected=%04x/%04x/%04x/%04x read=%04x/%04x/%04x/%04x flags=0x%04x\n",
++		variant, b43_modparam_cg3000_rfseq_route,
++		swctrlmap_2g[0], swctrlmap_2g[1], swctrlmap_2g[2],
++		swctrlmap_2g[3], swctrlmap_2g[4],
++		ctl_before, rf_control, ctl_after, ctl_b43,
++		table[0], table[16], table[32], table[63],
++		b43_phy_ht_cg3000_rfseq_tab_stream_read16(dev),
++		b43_phy_ht_cg3000_rfseq_tab_read16(dev, 15, 16),
++		b43_phy_ht_cg3000_rfseq_tab_read16(dev, 15, 32),
++		b43_phy_ht_cg3000_rfseq_tab_read16(dev, 15, 63),
++		b43_phy_ht_cg3000_swctrlmap_flags(swctrlmap_2g));
++}
++
+ static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)
+ {
+-	struct ssb_sprom *sprom = dev->dev->bus_sprom;
+-
+ 	if (!b43_cg3000_4331_board(dev))
+ 		return;
+ 
+ 	/*
+ 	 * The proprietary BCM4331/BCM4332 HTPHY path uses the 2 GHz FEM
+ 	 * fields from SPROM rev 9.  On CG3000-2STAUS the observed values are
+ 	 * pdet_range=3, tr_iso=3 and antswlut=0.  The antswlut path is
+-	 * intentionally left untouched here: eCos only writes HTPHY table 9
+-	 * for non-zero antswlut values, while this board reports zero.
++	 * separate from the RF switch-control table programmed below.
+ 	 */
+ 	b43_phy_ht_cg3000_apply_pdet_range(dev);
+ 	b43_phy_ht_cg3000_apply_triso(dev);
+-	if (sprom->fem.ghz2.antswlut)
+-		b43info(dev->wl, "CG3000 HTPHY antswlut=%u is not implemented\n",
+-			sprom->fem.ghz2.antswlut);
++	b43_phy_ht_cg3000_apply_rf_switch_map(dev);
+ }
+ 
+ static void b43_phy_ht_tx_power_ctl_setup(struct b43_wldev *dev)

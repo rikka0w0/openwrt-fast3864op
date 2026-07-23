@@ -1,0 +1,57 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -5697,6 +5697,34 @@ out:
+ 	b43info(wl, "Controller restarted\n");
+ }
+ 
++static void b43_cg3000_setup_ht_cap(struct b43_wldev *dev,
++				    struct ieee80211_supported_band *sband)
++{
++	u8 rxchain;
++	unsigned int chains;
++
++	if (!b43_cg3000_4331_board(dev))
++		return;
++
++	rxchain = dev->dev->bus_sprom->rxchain & 0x7;
++	if (!rxchain)
++		rxchain = dev->dev->bus_sprom->ant_available_bg & 0x7;
++	chains = hweight8(rxchain);
++	if (!chains)
++		chains = 1;
++	if (chains > 3)
++		chains = 3;
++
++	memset(sband->ht_cap.mcs.rx_mask, 0,
++	       sizeof(sband->ht_cap.mcs.rx_mask));
++	memset(sband->ht_cap.mcs.rx_mask, 0xff, chains);
++	sband->ht_cap.mcs.tx_params = IEEE80211_HT_MCS_TX_DEFINED |
++				      IEEE80211_HT_MCS_TX_RX_DIFF;
++	b43info(dev->wl,
++		"CG3000 HTPHY capability: rxchain=0x%02x rx_mcs_streams=%u tx_mcs_streams=1\n",
++		rxchain, chains);
++}
++
+ static int b43_setup_bands(struct b43_wldev *dev,
+ 			   bool have_2ghz_phy, bool have_5ghz_phy)
+ {
+@@ -5714,11 +5742,17 @@ static int b43_setup_bands(struct b43_wl
+ 		     phy->radio_rev == 9;
+ 
+ 	if (have_2ghz_phy) {
+-		if (dev->phy.type == B43_PHYTYPE_HT)
++		if (dev->phy.type == B43_PHYTYPE_HT) {
+ 			hw->wiphy->bands[NL80211_BAND_2GHZ] = limited_2g ?
+ 				&b43_band_2ghz_ht_limited :
+ 				&b43_band_2GHz_ht;
+-		else
++			/*
++			 * The static table enables one stream.  CG3000's SPROM
++			 * advertises three RX chains, but TX header support is
++			 * still limited to MCS0-7, so keep TX to one stream.
++			 */
++			b43_cg3000_setup_ht_cap(dev, hw->wiphy->bands[NL80211_BAND_2GHZ]);
++		} else
+ 			hw->wiphy->bands[NL80211_BAND_2GHZ] = limited_2g ?
+ 				&b43_band_2ghz_limited :
+ 				&b43_band_2GHz;

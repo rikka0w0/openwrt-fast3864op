@@ -1,0 +1,65 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -1737,6 +1737,41 @@ static u16 b43_tx_antenna_to_phyctl(stru
+ 	return (txchain << 6) & B43_TXH_PHY_ANT;
+ }
+ 
++static u16 b43_beacon_phy_ctl1(struct b43_wldev *dev, u8 rate)
++{
++	if (dev->phy.type != B43_PHYTYPE_HT)
++		return 0;
++
++	switch (rate) {
++	case B43_OFDM_RATE_6MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_1_2 |
++		       B43_TXH_PHY1_MODUL_BPSK | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_9MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_3_4 |
++		       B43_TXH_PHY1_MODUL_BPSK | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_12MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_1_2 |
++		       B43_TXH_PHY1_MODUL_QPSK | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_18MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_3_4 |
++		       B43_TXH_PHY1_MODUL_QPSK | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_24MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_1_2 |
++		       B43_TXH_PHY1_MODUL_QAM16 | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_36MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_3_4 |
++		       B43_TXH_PHY1_MODUL_QAM16 | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_48MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_2_3 |
++		       B43_TXH_PHY1_MODUL_QAM64 | B43_TXH_PHY1_MODE_SISO;
++	case B43_OFDM_RATE_54MB:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_CRATE_3_4 |
++		       B43_TXH_PHY1_MODUL_QAM64 | B43_TXH_PHY1_MODE_SISO;
++	default:
++		return B43_TXH_PHY1_BW_20 | B43_TXH_PHY1_MODE_SISO;
++	}
++}
++
+ static void b43_cg3000_dump_beacon_ies(struct b43_wldev *dev,
+ 					const struct sk_buff *skb,
+ 					size_t checked_len,
+@@ -1824,6 +1859,20 @@ static void b43_write_beacon_template(st
+ 		ctl |= B43_TXH_PHY_ENC_OFDM;
+ 	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_BEACPHYCTL, ctl);
+ 
++	if (dev->phy.type == B43_PHYTYPE_HT) {
++		u16 ext_ctl = b43_beacon_phy_ctl1(dev, rate);
++		static unsigned int logs;
++
++		b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_EXTNPHYCTL,
++				ext_ctl);
++		if (b43_cg3000_4331_board(dev) && logs < 16) {
++			b43info(dev->wl,
++				"CG3000 beacon phyctl: rate=0x%02x phyctl=0x%04x ext=0x%04x\n",
++				rate, ctl, ext_ctl);
++			logs++;
++		}
++	}
++
+ 	/* Find the position of the TIM and the DTIM_period value
+ 	 * and write them to SHM. */
+ 	ie = bcn->u.beacon.variable;

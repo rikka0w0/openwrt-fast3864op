@@ -1,0 +1,86 @@
+--- a/drivers/net/wireless/broadcom/b43/b43.h
++++ b/drivers/net/wireless/broadcom/b43/b43.h
+@@ -1100,8 +1100,13 @@ static inline void b43_stop_queue(struct
+ 	else
+ 	ieee80211_stop_queue(dev->wl->hw, queue_prio);
+ }
+ 
++extern int b43_modparam_cg3000_chipctl;
++extern int b43_modparam_cg3000_tssi_mux;
++extern int b43_modparam_cg3000_txpwr_idx;
++bool b43_cg3000_4331_board(struct b43_wldev *dev);
++
+ /* Message printing */
+ __printf(2, 3) void b43info(struct b43_wl *wl, const char *fmt, ...);
+ __printf(2, 3) void b43err(struct b43_wl *wl, const char *fmt, ...);
+ __printf(2, 3) void b43warn(struct b43_wl *wl, const char *fmt, ...);
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -115,6 +115,21 @@ static int b43_modparam_pio;
+ module_param_named(pio, b43_modparam_pio, int, 0644);
+ MODULE_PARM_DESC(pio, "Use PIO accesses by default: 0=DMA, 1=PIO");
+ 
++int b43_modparam_cg3000_chipctl = -1;
++module_param_named(cg3000_chipctl, b43_modparam_cg3000_chipctl, int, 0644);
++MODULE_PARM_DESC(cg3000_chipctl,
++		 "Override BCM4331 ChipControl on CG3000-2STAUS (-1 keeps driver default)");
++
++int b43_modparam_cg3000_tssi_mux = -1;
++module_param_named(cg3000_tssi_mux, b43_modparam_cg3000_tssi_mux, int, 0644);
++MODULE_PARM_DESC(cg3000_tssi_mux,
++		 "Override HTPHY radio TSSI mux on CG3000-2STAUS (-1 keeps driver default)");
++
++int b43_modparam_cg3000_txpwr_idx = -1;
++module_param_named(cg3000_txpwr_idx, b43_modparam_cg3000_txpwr_idx, int, 0644);
++MODULE_PARM_DESC(cg3000_txpwr_idx,
++		 "Override HTPHY TX power index on CG3000-2STAUS (-1 keeps driver default)");
++
+ static int modparam_allhwsupport = 1;
+ module_param_named(allhwsupport, modparam_allhwsupport, int, 0444);
+ MODULE_PARM_DESC(allhwsupport, "Enable support for all hardware (even it if overlaps with the brcmsmac driver)");
+@@ -454,7 +469,7 @@ void b43err(struct b43_wl *wl, const cha
+ 	va_end(args);
+ }
+ 
+-static bool b43_cg3000_4331_board(struct b43_wldev *dev)
++bool b43_cg3000_4331_board(struct b43_wldev *dev)
+ {
+ 	struct ssb_sprom *sprom = dev->dev->bus_sprom;
+ 
+@@ -3096,7 +3111,11 @@ static int b43_gpio_init(struct b43_wlde
+ 			 * ChipControl value.
+ 			 */
+-			chipctl_after |= BCMA_CHIPCTL_4331_EXTPA_EN |
+-					 BCMA_CHIPCTL_4331_EXTPA_EN2;
++			if (b43_modparam_cg3000_chipctl >= 0)
++				chipctl_after = b43_modparam_cg3000_chipctl;
++			else
++				chipctl_after |= BCMA_CHIPCTL_4331_EXTPA_EN |
++						 BCMA_CHIPCTL_4331_EXTPA_ON_GPIO2_5 |
++						 BCMA_CHIPCTL_4331_EXTPA_EN2;
+ 			bcma_cc_write32(cc, BCMA_CC_CHIPCTL, chipctl_after);
+ 			chipctl_after = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
+ 			b43info(dev->wl,
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -609,12 +609,19 @@ static void b43_phy_ht_tssi_setup(struct
+ {
+ 	static const u16 routing[] = { R2059_C1, R2059_C2, R2059_C3, };
+ 	int core;
++	u16 mux = 0x0011;
+ 
+ 	/* 0x159 is probably TX_SSI_MUX or TSSIG (by comparing to N-PHY) */
++	if (b43_cg3000_4331_board(dev) && b43_modparam_cg3000_tssi_mux >= 0)
++		mux = b43_modparam_cg3000_tssi_mux;
++
+ 	for (core = 0; core < 3; core++) {
+ 		b43_radio_set(dev, 0x8bf, 0x1);
+-		b43_radio_write(dev, routing[core] | 0x0159, 0x0011);
++		b43_radio_write(dev, routing[core] | 0x0159, mux);
+ 	}
++
++	if (b43_cg3000_4331_board(dev))
++		b43info(dev->wl, "CG3000 HTPHY TSSI mux=0x%04x\n", mux);
+ }
+ 
+ static void b43_phy_ht_tx_power_ctl_setup(struct b43_wldev *dev)

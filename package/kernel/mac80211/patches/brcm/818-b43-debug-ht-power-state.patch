@@ -1,0 +1,25 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -717,4 +717,22 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 		}
+ 		b43_httab_write_bulk(dev, B43_HTTAB16(26 + c, 0), 64, regval);
+ 	}
++
++	if (dev->dev->chip_id == BCMA_CHIP_ID_BCM4331)
++		b43info(dev->wl,
++			"HT TX power setup: freq=%u target=%u/%u/%u idle=%u/%u/%u a1=%d/%d/%d b0=%d/%d/%d b1=%d/%d/%d cmd=%04x/%04x/%04x targ=%04x/%04x idle_reg=%04x/%04x n=%04x tssimode=%04x\n",
++			freq, target[0], target[1], target[2],
++			idle[0], idle[1], idle[2],
++			a1[0], a1[1], a1[2],
++			b0[0], b0[1], b0[2],
++			b1[0], b1[1], b1[2],
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C1),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C2),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C3),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_TARG_PWR),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_TARG_PWR2),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI2),
++			b43_phy_read(dev, B43_PHY_HT_TXPCTL_N),
++			b43_phy_read(dev, B43_PHY_HT_TSSIMODE));
+ }

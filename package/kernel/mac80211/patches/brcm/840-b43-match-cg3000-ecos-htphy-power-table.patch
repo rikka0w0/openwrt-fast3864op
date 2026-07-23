@@ -1,0 +1,62 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -881,7 +881,7 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 	u8 *idle = phy_ht->idle_tssi;
+ 	u8 target[3];
+ 	s16 a1[3], b0[3], b1[3];
+-
++	u8 regval[64];
+ 	u16 freq = dev->phy.chandef->chan->center_freq;
+ 	int i, c;
+ 
+@@ -915,6 +915,28 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 	}
+ 
+ 	b43_phy_set(dev, B43_PHY_HT_TSSIMODE, B43_PHY_HT_TSSIMODE_EN);
++	if (b43_cg3000_4331_board(dev)) {
++		/*
++		 * eCos MCP_iHtPhySetupTxPowerControl writes these raw HTPHY
++		 * registers before programming the TXPCTL command, target-power
++		 * and PA tables.
++		 */
++		b43_phy_set(dev, 0x0122, 0x0001);
++		b43_phy_mask(dev, 487, 0x7fff);
++		b43_phy_maskset(dev, 489, 0xbfff, 0x4000);
++		b43_phy_set(dev, 489, 0x8000);
++		b43_phy_maskset(dev, 488, 0xff00, 150);
++		b43_phy_maskset(dev, 488, 0xf8ff, 0x0300);
++		b43_phy_mask(dev, 487, 0xf7ff);
++		b43_phy_mask(dev, 487, 0xfbff);
++		b43info(dev->wl,
++			"CG3000 HTPHY eCos TXPCTL raw regs: phy122=0x%04x phy487=0x%04x phy488=0x%04x phy489=0x%04x\n",
++			b43_phy_read(dev, 0x0122),
++			b43_phy_read(dev, 487),
++			b43_phy_read(dev, 488),
++			b43_phy_read(dev, 489));
++	}
++
+ 	b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1,
+ 		     ~B43_PHY_HT_TXPCTL_CMD_C1_PCTLEN & 0xFFFF);
+ 	if (b43_cg3000_4331_board(dev) && sprom->fem.ghz2.pdet_range)
+@@ -1015,7 +1037,6 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 
+ 	for (c = 0; c < 3; c++) {
+ 		s32 num, den, pwr;
+-		u32 regval[64];
+ 
+ 		for (i = 0; i < 64; i++) {
+ 			num = 8 * (16 * b0[c] + b1[c] * i);
+@@ -1023,7 +1044,12 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 			pwr = max((4 * num + den / 2) / den, -8);
+ 			regval[i] = pwr;
+ 		}
+-		b43_httab_write_bulk(dev, B43_HTTAB16(26 + c, 0), 64, regval);
++		/*
++		 * The proprietary CG3000 eCos path calls its HTPHY table writer
++		 * as sub_80A2FE74(..., table_id=26+c, len=64, offset=0,
++		 * width=8, data), so these TX power-control tables are 8-bit.
++		 */
++		b43_httab_write_bulk(dev, B43_HTTAB8(26 + c, 0), 64, regval);
+ 	}
+ 
+ 	b43_phy_ht_update_ucode_txpower(dev, target);

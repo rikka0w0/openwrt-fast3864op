@@ -1,0 +1,55 @@
+--- a/drivers/net/wireless/broadcom/b43/b43.h
++++ b/drivers/net/wireless/broadcom/b43/b43.h
+@@ -1113,6 +1113,8 @@ extern int b43_modparam_cg3000_txpwr_idx
+ extern int b43_modparam_cg3000_tx_ant_phyctl;
+ extern int b43_modparam_cg3000_txpwr_phyctl;
+ extern int b43_modparam_cg3000_aa2g;
++extern int b43_modparam_cg3000_target_power;
++extern int b43_modparam_cg3000_idle_tssi;
+ bool b43_cg3000_4331_board(struct b43_wldev *dev);
+ u16 b43_cg3000_txpwr_phy_ctl(struct b43_wldev *dev);
+ 
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -139,6 +139,16 @@ module_param_named(cg3000_txpwr_phyctl,
+ MODULE_PARM_DESC(cg3000_txpwr_phyctl,
+ 		 "Override CG3000-2STAUS PHY TX header power field 0..63 (-1 uses 63)");
+ 
++int b43_modparam_cg3000_target_power = 124;
++module_param_named(cg3000_target_power, b43_modparam_cg3000_target_power, int, 0644);
++MODULE_PARM_DESC(cg3000_target_power,
++		 "CG3000-2STAUS HTPHY target power register value (default 124, -1 uses SPROM/eCos-derived default)");
++
++int b43_modparam_cg3000_idle_tssi = 40;
++module_param_named(cg3000_idle_tssi, b43_modparam_cg3000_idle_tssi, int, 0644);
++MODULE_PARM_DESC(cg3000_idle_tssi,
++		 "CG3000-2STAUS HTPHY idle TSSI register value (default 40, -1 uses SPROM/eCos-derived default)");
++
+ int b43_modparam_cg3000_aa2g = 3;
+ module_param_named(cg3000_aa2g, b43_modparam_cg3000_aa2g, int, 0644);
+ MODULE_PARM_DESC(cg3000_aa2g,
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -615,11 +615,19 @@ static void b43_phy_ht_tx_power_ctl_idle
+ 		 * 2 GHz idle TSSI initvars and passes them directly to
+ 		 * MCP_iHtPhySetIdleTssiForCore(), instead of measuring them
+ 		 * with a live TX tone.
++		 *
++		 * Empirical CG3000 initramfs tests show the SPROM idle TSSI
++		 * value is too weak with b43's HT power-control path.  Keep a
++		 * module parameter so the board default can still be swept
++		 * without rebuilding the image.
+ 		 */
+ 		for (core = 0; core < 3; core++)
+-			phy_ht->idle_tssi[core] = sprom->core_pwr_info[core].itssi_2g;
+-		b43info(dev->wl, "CG3000 HTPHY idle TSSI from SPROM: %u/%u/%u\n",
++			phy_ht->idle_tssi[core] =
++				b43_modparam_cg3000_idle_tssi >= 0 ?
++				b43_modparam_cg3000_idle_tssi & 0x3f :
++				sprom->core_pwr_info[core].itssi_2g;
++		b43info(dev->wl, "CG3000 HTPHY idle TSSI: %u/%u/%u param=%d\n",
+ 			phy_ht->idle_tssi[0], phy_ht->idle_tssi[1],
+-			phy_ht->idle_tssi[2]);
++			phy_ht->idle_tssi[2], b43_modparam_cg3000_idle_tssi);
+ 		return;
+ 	}

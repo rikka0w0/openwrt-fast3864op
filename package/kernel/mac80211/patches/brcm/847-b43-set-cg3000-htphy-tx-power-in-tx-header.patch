@@ -1,0 +1,11 @@
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -526,6 +526,8 @@ int b43_generate_txhdr(struct b43_wldev
+ 		phy_ctl |= B43_TXH_PHY_SHORTPRMBL;
+ 
+ 	phy_ctl |= b43_tx_antenna_phy_ctl(dev);
++	if (b43_cg3000_4331_board(dev))
++		phy_ctl |= B43_TXH_PHY_TXPWR;
+ 
+ 	/* MAC control */
+ 	if (!(info->flags & IEEE80211_TX_CTL_NO_ACK))

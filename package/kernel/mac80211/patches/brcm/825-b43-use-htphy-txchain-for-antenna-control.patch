@@ -1,0 +1,85 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -1710,6 +1710,33 @@
+ 	return 0;
+ }
+ 
++static u16 b43_tx_antenna_to_phyctl(struct b43_wldev *dev, int antenna)
++{
++	u8 txchain;
++
++	if (dev->phy.type != B43_PHYTYPE_HT)
++		return b43_antenna_to_phyctl(antenna);
++
++	switch (antenna) {
++	case B43_ANTENNA0:
++		return 1 << 6;
++	case B43_ANTENNA1:
++		return 2 << 6;
++	case B43_ANTENNA2:
++		return 4 << 6;
++	case B43_ANTENNA3:
++		return 8 << 6;
++	}
++
++	txchain = dev->dev->bus_sprom->txchain & 0xf;
++	if (!txchain)
++		txchain = dev->dev->bus_sprom->ant_available_bg & 0xf;
++	if (!txchain)
++		return B43_TXH_PHY_ANT01AUTO;
++
++	return (txchain << 6) & B43_TXH_PHY_ANT;
++}
++
+ static void b43_cg3000_dump_beacon_ies(struct b43_wldev *dev,
+ 					const struct sk_buff *skb,
+ 					size_t checked_len,
+@@ -1791,7 +1818,7 @@
+ 
+ 	/* Write the PHY TX control parameters. */
+ 	antenna = dev->tx_antenna;
+-	antenna = b43_antenna_to_phyctl(antenna);
++	antenna = b43_tx_antenna_to_phyctl(dev, antenna);
+ 	ctl = b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_BEACPHYCTL);
+ 	/* We can't send beacons with short preamble. Would get PHY errors. */
+ 	ctl &= ~B43_TXH_PHY_SHORTPRMBL;
+@@ -3429,7 +3456,7 @@
+ 	u16 ant;
+ 	u16 tmp;
+ 
+-	ant = b43_antenna_to_phyctl(antenna);
++	ant = b43_tx_antenna_to_phyctl(dev, antenna);
+ 
+ 	/* For ACK/CTS */
+ 	tmp = b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_ACKCTSPHYCTL);
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -196,6 +196,28 @@
+ {
+ 	u8 antenna_mask;
+ 
++	if (dev->phy.type == B43_PHYTYPE_HT) {
++		u8 txchain = dev->dev->bus_sprom->txchain & 0xf;
++
++		switch (dev->tx_antenna) {
++		case B43_ANTENNA0:
++			return 1 << 6;
++		case B43_ANTENNA1:
++			return 2 << 6;
++		case B43_ANTENNA2:
++			return 4 << 6;
++		case B43_ANTENNA3:
++			return 8 << 6;
++		}
++
++		if (!txchain)
++			txchain = dev->dev->bus_sprom->ant_available_bg & 0xf;
++		if (!txchain)
++			return B43_TXH_PHY_ANT01AUTO;
++
++		return (txchain << 6) & B43_TXH_PHY_ANT;
++	}
++
+ 	if (dev->phy.gmode)
+ 		antenna_mask = dev->dev->bus_sprom->ant_available_bg;
+ 	else

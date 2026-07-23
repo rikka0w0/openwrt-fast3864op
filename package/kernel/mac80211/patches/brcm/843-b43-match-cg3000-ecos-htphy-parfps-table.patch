@@ -1,0 +1,238 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -1068,6 +1068,214 @@ static void b43_phy_ht_cg3000_apply_gai
+ 	b43info(dev->wl, "CG3000 HTPHY RFSEQ table7 gain table applied\n");
+ }
+ 
++static s16 b43_phy_ht_cg3000_sat_add_s16(s16 a, s16 b)
++{
++	int value = a + b;
++
++	if (value > 32767)
++		return 32767;
++	if (value < -32768)
++		return -32768;
++
++	return value;
++}
++
++static s32 b43_phy_ht_cg3000_sat_add_s32(s32 a, s32 b)
++{
++	s64 value = (s64)a + b;
++
++	if (value > 0x7fffffff)
++		return 0x7fffffff;
++	if (value < (-0x7fffffff - 1))
++		return -0x7fffffff - 1;
++
++	return value;
++}
++
++static s16 b43_phy_ht_cg3000_norm_shift_s32(s32 value)
++{
++	u32 shifted = value;
++	s16 count = 0;
++
++	if (!value)
++		return 31;
++
++	while (((s32)shifted >> 31) == ((s32)shifted >> 30)) {
++		shifted <<= 1;
++		count++;
++	}
++
++	return count;
++}
++
++static s16 b43_phy_ht_cg3000_scale_s16(s16 value, int shift)
++{
++	int i;
++
++	if (shift < -15)
++		shift = -15;
++	if (shift > 15)
++		shift = 15;
++	if (shift <= 0)
++		return value >> -shift;
++
++	for (i = 0; i < shift; i++)
++		value = b43_phy_ht_cg3000_sat_add_s16(value, value);
++
++	return value;
++}
++
++static s32 b43_phy_ht_cg3000_scale_s32(s32 value, int shift)
++{
++	int i;
++
++	if (shift < -31)
++		shift = -31;
++	if (shift > 31)
++		shift = 31;
++	if (shift < 0)
++		return value >> -shift;
++
++	for (i = 0; i < shift; i++)
++		value = b43_phy_ht_cg3000_sat_add_s32(value, value);
++
++	return value;
++}
++
++static s16 b43_phy_ht_cg3000_mul_q15(s16 a, s16 b)
++{
++	s32 product;
++
++	if (a == -32768 && b == -32768)
++		product = -2;
++	else
++		product = 2 * a * b;
++
++	return product >> 16;
++}
++
++static void b43_phy_ht_cg3000_log2_fixed(u32 value, s16 exponent,
++					 s16 *mantissa, s16 *shift)
++{
++	static const s16 log2_lut[] = {
++		0, 1455, 2866, 4236, 5568, 6863, 8124, 9352,
++		10549, 11716, 12855, 13968, 15055, 16117, 17156,
++		18173, 19168, 20143, 21098, 22034, 22952, 23852,
++		24736, 25604, 26455, 27292, 28114, 28922, 29717,
++		30498, 31267, 32024,
++	};
++	s16 norm_shift = b43_phy_ht_cg3000_norm_shift_s32(value);
++	u32 normalized = value << norm_shift;
++	u32 index = (normalized >> 25) & 0x1f;
++	u16 delta = log2_lut[index + 1] - log2_lut[index];
++	s16 interp = ((normalized & 0x01ffffff) >> 9) * delta >> 16;
++	s16 log_value = b43_phy_ht_cg3000_sat_add_s16(log2_lut[index],
++						      interp);
++	s16 exp_shift = exponent + norm_shift - 30;
++	s32 normalized_log = b43_phy_ht_cg3000_sat_add_s32(log_value,
++							   -32768 * exp_shift);
++	s16 out_shift = b43_phy_ht_cg3000_norm_shift_s32(normalized_log);
++	s32 scaled = b43_phy_ht_cg3000_scale_s32(normalized_log,
++						 out_shift - 16);
++
++	*mantissa = b43_phy_ht_cg3000_mul_q15(scaled, 19728);
++	*shift = out_shift;
++}
++
++static void b43_phy_ht_cg3000_apply_parfps_table(struct b43_wldev *dev)
++{
++	static const u8 ecos_2g_gain_keys[128] = {
++		0x41, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x3e, 0x40, 0x40,
++		0x40, 0x41, 0x41, 0x3f, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x3f, 0x40, 0x40,
++		0x40, 0x40, 0x40, 0x40, 0x40, 0x3e, 0x40, 0x40,
++		0x40, 0x3e, 0x40, 0x40, 0x40, 0x40, 0x3e, 0x40,
++	};
++	const u8 parfps = 8;
++	const u8 vlin2g = 1;
++	const u8 gain_settle_dly_2g = 3;
++	s16 ref_mantissa;
++	s16 ref_shift;
++	s16 last_mantissa = 0;
++	s16 last_shift = 0;
++	s16 last_gain = -1;
++	u8 last_scale_shift = 0;
++	unsigned int i;
++
++	if (!b43_cg3000_4331_board(dev))
++		return;
++
++	if (b43_current_band(dev->wl) != NL80211_BAND_2GHZ)
++		return;
++
++	b43_phy_ht_cg3000_log2_fixed(64, 0, &ref_mantissa, &ref_shift);
++
++	for (i = 0; i < 128; i++) {
++		s16 gain = ecos_2g_gain_keys[i];
++		s32 numerator;
++		u32 value;
++
++		if (gain != last_gain) {
++			s16 mantissa;
++			s16 shift;
++			s16 ref = ref_mantissa;
++			s16 common_shift;
++
++			b43_phy_ht_cg3000_log2_fixed(gain, 0, &mantissa,
++						     &shift);
++			if (shift >= ref_shift) {
++				mantissa = b43_phy_ht_cg3000_scale_s16(mantissa,
++								       shift - ref_shift);
++				common_shift = ref_shift;
++			} else {
++				ref = b43_phy_ht_cg3000_scale_s16(ref_mantissa,
++								  ref_shift - shift);
++				common_shift = shift;
++			}
++
++			last_mantissa = b43_phy_ht_cg3000_sat_add_s16(mantissa,
++								      -ref);
++			last_shift = common_shift;
++			last_gain = gain;
++			last_scale_shift = common_shift < 4 ? 4 - common_shift :
++					   common_shift - 4;
++		}
++
++		numerator = (i << last_scale_shift) + 5 * last_mantissa;
++		if (last_scale_shift >= 2)
++			numerator += 1 << (last_scale_shift - 2);
++		if (last_scale_shift)
++			numerator >>= last_scale_shift - 1;
++		value = (numerator * parfps) >> 3;
++		value |= vlin2g << 10;
++		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, value);
++	}
++
++	for (i = 0; i <= gain_settle_dly_2g; i++) {
++		u32 value = b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7,
++							       576 + gain_settle_dly_2g);
++
++		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, value);
++	}
++
++	b43info(dev->wl,
++		"CG3000 HTPHY RFSEQ table7 parfps table applied: first=0x%08x settle=0x%08x last=0x%08x\n",
++		b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7, 576),
++		b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7, 576 + gain_settle_dly_2g),
++		b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7, 703));
++}
++
+ static void b43_phy_ht_cg3000_apply_table24(struct b43_wldev *dev)
+ {
+ 	unsigned int i;
+@@ -1345,8 +1553,6 @@ static int b43_phy_ht_op_init(struct b43
+ 	}
+ 
+ 	b43_phy_ht_tables_init(dev);
+-	b43_phy_ht_cg3000_apply_gain_table(dev);
+-	b43_phy_ht_cg3000_apply_table24(dev);
+ 
+ 	b43_phy_mask(dev, 0x0be, ~0x2);
+ 	b43_phy_set(dev, 0x23f, 0x7ff);
+@@ -1431,6 +1637,11 @@ static int b43_phy_ht_op_init(struct b43
+ 	tmp = b43_httab_read(dev, B43_HTTAB16(7, 0x164));
+ 	b43_httab_write(dev, B43_HTTAB16(7, 0x16a), tmp);
+ 
++	b43_phy_ht_cg3000_apply_gain_table(dev);
++	b43_phy_ht_cg3000_apply_rf_switch_map(dev);
++	b43_phy_ht_cg3000_apply_parfps_table(dev);
++	b43_phy_ht_cg3000_apply_table24(dev);
++
+ 	/* Reset CCA */
+ 	b43_phy_force_clock(dev, true);
+ 	tmp = b43_phy_read(dev, B43_PHY_HT_BBCFG);

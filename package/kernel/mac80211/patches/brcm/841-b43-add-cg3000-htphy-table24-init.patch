@@ -1,0 +1,48 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -882,6 +882,37 @@ static void b43_phy_ht_cg3000_apply_rf_
+ 		b43_phy_ht_cg3000_swctrlmap_flags(swctrlmap_2g));
+ }
+ 
++static void b43_phy_ht_cg3000_apply_table24(struct b43_wldev *dev)
++{
++	unsigned int i;
++
++	if (!b43_cg3000_4331_board(dev))
++		return;
++
++	if (b43_current_band(dev->wl) != NL80211_BAND_2GHZ)
++		return;
++
++	/*
++	 * The proprietary CG3000 eCos HTPHY init calls sub_80A72964 after
++	 * programming RF switch control.  That routine writes table 24 through
++	 * the RF-sequencer table window as 256 32-bit entries, each set to
++	 * 0x00080000.
++	 */
++	b43_phy_ht_cg3000_phy_write_direct(dev, B43_PHY_HT_RFSEQ_TABLE_ADDR,
++					   24 << 10);
++	for (i = 0; i < 256; i++) {
++		b43_phy_ht_cg3000_phy_write_direct(dev,
++						   B43_PHY_HT_RFSEQ_TABLE_DATAHI,
++						   0x0008);
++		b43_phy_ht_cg3000_phy_write_direct(dev,
++						   B43_PHY_HT_RFSEQ_TABLE_DATALO,
++						   0x0000);
++	}
++	dev->phy.writes_counter = 0;
++
++	b43info(dev->wl, "CG3000 HTPHY RFSEQ table24 detector map applied\n");
++}
++
+ static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)
+ {
+ 	if (!b43_cg3000_4331_board(dev))
+@@ -1231,6 +1256,7 @@ static int b43_phy_ht_op_init(struct b43
+ 	}
+ 
+ 	b43_phy_ht_tables_init(dev);
++	b43_phy_ht_cg3000_apply_table24(dev);
+ 
+ 	b43_phy_mask(dev, 0x0be, ~0x2);
+ 	b43_phy_set(dev, 0x23f, 0x7ff);

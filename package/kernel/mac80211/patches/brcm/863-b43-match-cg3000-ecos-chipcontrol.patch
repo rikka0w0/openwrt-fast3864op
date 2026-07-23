@@ -1,0 +1,49 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -120,5 +120,23 @@ MODULE_PARM_DESC(cg3000_chipctl,
+ 		 "Override BCM4331 ChipControl on CG3000-2STAUS (-1 keeps driver default)");
+ 
++/*
++ * The CG3000-2STAUS eCos HTPHY path programs ChipCommon ChipControl
++ * offset 0x28 from sub_80A4FE0C after parsing the BCM4332 SPROM
++ * boardflags.  The high bit below is not covered by the public
++ * BCMA_CHIPCTL_4331_* names, but without it the board's AP beacons are
++ * visible only at very low RSSI even with TX power control enabled.
++ */
++#define B43_CG3000_CHIPCTL_ECOS_PA_PATH	BIT(24)
++#define B43_CG3000_CHIPCTL_ECOS_MASK		\
++	(B43_CG3000_CHIPCTL_ECOS_PA_PATH |	\
++	 BCMA_CHIPCTL_4331_EXT_LNA |		\
++	 BCMA_CHIPCTL_4331_EXTPA_EN |		\
++	 BCMA_CHIPCTL_4331_EXTPA_ON_GPIO2_5)
++#define B43_CG3000_CHIPCTL_ECOS_SET		\
++	(B43_CG3000_CHIPCTL_ECOS_PA_PATH |	\
++	 BCMA_CHIPCTL_4331_EXT_LNA |		\
++	 BCMA_CHIPCTL_4331_EXTPA_ON_GPIO2_5)
++
+ int b43_modparam_cg3000_tssi_mux = -1;
+ module_param_named(cg3000_tssi_mux, b43_modparam_cg3000_tssi_mux, int, 0644);
+ MODULE_PARM_DESC(cg3000_tssi_mux,
+@@ -3254,16 +3269,16 @@ static int b43_gpio_init(struct b43_wlde
+ 			/*
+ 			 * This BCM4331 is package 8.  The generic BCMA PMU
+ 			 * setup enables EXTPA_EN and EXTPA_EN2 for that
+-			 * package.  Keep that normal package-8 external-PA
+-			 * path unless a later debug override asks for another
+-			 * ChipControl value.
++			 * package.  eCos then applies a board-specific
++			 * ChipControl mask/set for the CG3000 external PA/RF
++			 * path.  Keep a full override module parameter for
++			 * bring-up sweeps.
+ 			 */
+ 			if (b43_modparam_cg3000_chipctl >= 0)
+ 				chipctl_after = b43_modparam_cg3000_chipctl;
+ 			else
+-				chipctl_after |= BCMA_CHIPCTL_4331_EXTPA_EN |
+-						 BCMA_CHIPCTL_4331_EXTPA_ON_GPIO2_5 |
+-						 BCMA_CHIPCTL_4331_EXTPA_EN2;
++				chipctl_after = (chipctl_after & ~B43_CG3000_CHIPCTL_ECOS_MASK) |
++						 B43_CG3000_CHIPCTL_ECOS_SET;
+ 			bcma_cc_write32(cc, BCMA_CC_CHIPCTL, chipctl_after);
+ 			chipctl_after = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
+ 			b43info(dev->wl,

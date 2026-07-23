@@ -1,0 +1,47 @@
+--- a/drivers/net/wireless/broadcom/b43/b43.h
++++ b/drivers/net/wireless/broadcom/b43/b43.h
+@@ -1103,6 +1103,7 @@ static inline void b43_stop_queue(struct
+ extern int b43_modparam_cg3000_chipctl;
+ extern int b43_modparam_cg3000_tssi_mux;
+ extern int b43_modparam_cg3000_txpwr_idx;
++extern int b43_modparam_cg3000_tx_ant_phyctl;
+ bool b43_cg3000_4331_board(struct b43_wldev *dev);
+ 
+ /* Message printing */
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -129,5 +129,10 @@ MODULE_PARM_DESC(cg3000_txpwr_idx,
+ 		 "Override HTPHY TX power index on CG3000-2STAUS (-1 keeps driver default)");
+ 
++int b43_modparam_cg3000_tx_ant_phyctl = -1;
++module_param_named(cg3000_tx_ant_phyctl, b43_modparam_cg3000_tx_ant_phyctl, int, 0644);
++MODULE_PARM_DESC(cg3000_tx_ant_phyctl,
++		 "Override CG3000-2STAUS HTPHY TX header antenna bits (-1 uses SPROM txchain)");
++
+ static int b43_modparam_cg3000_gpio_mask = -1;
+ module_param_named(cg3000_gpio_mask, b43_modparam_cg3000_gpio_mask, int, 0644);
+ MODULE_PARM_DESC(cg3000_gpio_mask,
+@@ -1735,6 +1741,10 @@ static u16 b43_tx_antenna_to_phyctl(stru
+ 	if (dev->phy.type != B43_PHYTYPE_HT)
+ 		return b43_antenna_to_phyctl(antenna);
+ 
++	if (b43_cg3000_4331_board(dev) &&
++	    b43_modparam_cg3000_tx_ant_phyctl >= 0)
++		return b43_modparam_cg3000_tx_ant_phyctl & B43_TXH_PHY_ANT;
++
+ 	switch (antenna) {
+ 	case B43_ANTENNA0:
+ 		return 1 << 6;
+--- a/drivers/net/wireless/broadcom/b43/xmit.c
++++ b/drivers/net/wireless/broadcom/b43/xmit.c
+@@ -265,6 +265,10 @@ static u16 b43_tx_antenna_phy_ctl(struct
+ 	if (dev->phy.type == B43_PHYTYPE_HT) {
+ 		u8 txchain = dev->dev->bus_sprom->txchain & 0xf;
+ 
++		if (b43_cg3000_4331_board(dev) &&
++		    b43_modparam_cg3000_tx_ant_phyctl >= 0)
++			return b43_modparam_cg3000_tx_ant_phyctl & B43_TXH_PHY_ANT;
++
+ 		switch (dev->tx_antenna) {
+ 		case B43_ANTENNA0:
+ 			return 1 << 6;

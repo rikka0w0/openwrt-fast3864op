@@ -1,0 +1,26 @@
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -567,6 +567,23 @@ static void b43_phy_ht_tx_power_ctl(stru
+ 					      phy_ht->tx_pwr_idx[i]);
+ 		for (i = 0; i < 3; i++)
+ 			b43_phy_set(dev, cmd_regs[i], en_bits);
++
++		if (b43_cg3000_4331_board(dev)) {
++			for (i = 0; i < 3; i++) {
++				u16 init = b43_phy_read(dev, cmd_regs[i]) &
++					   B43_PHY_HT_TXPCTL_CMD_C1_INIT;
++
++				b43_phy_maskset(dev, cmd_regs[i],
++						~(B43_PHY_HT_TXPCTL_CMD_C1_INIT |
++						  en_bits) & 0xffff,
++						init | en_bits);
++			}
++			b43info(dev->wl,
++				"CG3000 HTPHY forced TXPCTL enable: cmd=%04x/%04x/%04x\n",
++				b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C1),
++				b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C2),
++				b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C3));
++		}
+ 	}
+ 
+ 	phy_ht->tx_pwr_ctl = enable;

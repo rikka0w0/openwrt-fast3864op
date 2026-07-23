@@ -1,0 +1,93 @@
+--- a/drivers/net/wireless/broadcom/b43/b43.h
++++ b/drivers/net/wireless/broadcom/b43/b43.h
+@@ -1104,6 +1104,7 @@ extern int b43_modparam_cg3000_chipctl;
+ extern int b43_modparam_cg3000_tssi_mux;
+ extern int b43_modparam_cg3000_txpwr_idx;
+ extern int b43_modparam_cg3000_tx_ant_phyctl;
++extern int b43_modparam_cg3000_aa2g;
+ bool b43_cg3000_4331_board(struct b43_wldev *dev);
+ 
+ /* Message printing */
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -134,6 +134,11 @@ module_param_named(cg3000_tx_ant_phyctl
+ MODULE_PARM_DESC(cg3000_tx_ant_phyctl,
+ 		 "Override CG3000-2STAUS HTPHY TX header antenna bits (-1 uses SPROM txchain)");
+ 
++int b43_modparam_cg3000_aa2g = 3;
++module_param_named(cg3000_aa2g, b43_modparam_cg3000_aa2g, int, 0644);
++MODULE_PARM_DESC(cg3000_aa2g,
++		 "Override CG3000-2STAUS eCos aa2g antenna path init (default 3 matches eCos)");
++
+ static int b43_modparam_cg3000_gpio_mask = -1;
+ module_param_named(cg3000_gpio_mask, b43_modparam_cg3000_gpio_mask, int, 0644);
+ MODULE_PARM_DESC(cg3000_gpio_mask,
+--- a/drivers/net/wireless/broadcom/b43/phy_ht.c
++++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
+@@ -1303,6 +1303,58 @@ static void b43_phy_ht_cg3000_apply_tab
+ 	b43info(dev->wl, "CG3000 HTPHY RFSEQ table24 detector map applied\n");
+ }
+ 
++static void b43_phy_ht_cg3000_apply_aa2g(struct b43_wldev *dev)
++{
++	u8 aa2g;
++
++	if (!b43_cg3000_4331_board(dev))
++		return;
++
++	if (b43_current_band(dev->wl) != NL80211_BAND_2GHZ)
++		return;
++
++	aa2g = b43_modparam_cg3000_aa2g;
++
++	/*
++	 * eCos MCP_iWlHtphyParseInitvars reads the aa2g initvar and calls
++	 * sub_80A75C2C() when it is non-zero.  That helper only changes
++	 * hardware-visible HTPHY registers for aa2g values 1, 2 and 3.
++	 * Its final write updates an eCos-side raw-PHY shadow/cache bank;
++	 * b43 has no matching shadow object here, so only the direct HTPHY
++	 * register writes are mirrored.
++	 */
++	switch (aa2g) {
++	case 1:
++		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0000);
++		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0000);
++		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
++		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0000);
++		break;
++	case 2:
++		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0000);
++		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0001);
++		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
++		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0200);
++		break;
++	case 3:
++		b43_phy_maskset(dev, 0x0410, ~0x0002, 0x0002);
++		b43_phy_maskset(dev, 0x0410, ~0x0001, 0x0000);
++		b43_phy_maskset(dev, 0x04b0, ~0x0020, 0x0020);
++		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0000);
++		break;
++	default:
++		b43info(dev->wl,
++			"CG3000 HTPHY aa2g=%u skipped: eCos only handles 1/2/3\n",
++			aa2g);
++		return;
++	}
++
++	b43info(dev->wl,
++		"CG3000 HTPHY aa2g=%u applied: phy410=0x%04x phy4b0=0x%04x phy4b1=0x%04x\n",
++		aa2g, b43_phy_read(dev, 0x0410), b43_phy_read(dev, 0x04b0),
++		b43_phy_read(dev, 0x04b1));
++}
++
+ static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)
+ {
+ 	if (!b43_cg3000_4331_board(dev))
+@@ -1317,6 +1388,7 @@ static void b43_phy_ht_cg3000_apply_fem
+ 	b43_phy_ht_cg3000_apply_pdet_range(dev);
+ 	b43_phy_ht_cg3000_apply_triso(dev);
+ 	b43_phy_ht_cg3000_apply_rf_switch_map(dev);
++	b43_phy_ht_cg3000_apply_aa2g(dev);
+ }
+ 
+ static void b43_phy_ht_tx_power_ctl_setup(struct b43_wldev *dev)
