@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -544,16 +544,22 @@ static void b43_phy_ht_tx_power_ctl(stru
+@@ -544,17 +544,23 @@ static void b43_phy_ht_tx_power_ctl(stru
  					    B43_PHY_HT_TX_PCTL_STATUS_C3 };
  	int i;
  

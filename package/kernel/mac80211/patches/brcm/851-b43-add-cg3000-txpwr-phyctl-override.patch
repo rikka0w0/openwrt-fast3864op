@@ -56,7 +56,7 @@
  	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_ACKCTSPHYCTL, ctl);
 --- a/drivers/net/wireless/broadcom/b43/xmit.c
 +++ b/drivers/net/wireless/broadcom/b43/xmit.c
-@@ -537,8 +537,8 @@ int b43_generate_txhdr(struct b43_wldev
+@@ -537,6 +537,6 @@ int b43_generate_txhdr(struct b43_wldev
  
  	phy_ctl |= b43_tx_antenna_phy_ctl(dev);
  	if (b43_cg3000_4331_board(dev))

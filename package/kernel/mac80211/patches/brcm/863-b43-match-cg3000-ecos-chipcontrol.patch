@@ -24,13 +24,12 @@
  int b43_modparam_cg3000_tssi_mux = -1;
  module_param_named(cg3000_tssi_mux, b43_modparam_cg3000_tssi_mux, int, 0644);
  MODULE_PARM_DESC(cg3000_tssi_mux,
-@@ -3254,16 +3269,16 @@ static int b43_gpio_init(struct b43_wlde
+@@ -3156,13 +3171,14 @@ static int b43_gpio_init(struct b43_wlde
  			/*
  			 * This BCM4331 is package 8.  The generic BCMA PMU
  			 * setup enables EXTPA_EN and EXTPA_EN2 for that
--			 * package.  Keep that normal package-8 external-PA
--			 * path unless a later debug override asks for another
--			 * ChipControl value.
+-			 * package, so keep that normal package-8 external-PA
+-			 * path on this board.
 +			 * package.  eCos then applies a board-specific
 +			 * ChipControl mask/set for the CG3000 external PA/RF
 +			 * path.  Keep a full override module parameter for
@@ -45,5 +44,3 @@
 +				chipctl_after = (chipctl_after & ~B43_CG3000_CHIPCTL_ECOS_MASK) |
 +						 B43_CG3000_CHIPCTL_ECOS_SET;
  			bcma_cc_write32(cc, BCMA_CC_CHIPCTL, chipctl_after);
- 			chipctl_after = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
- 			b43info(dev->wl,

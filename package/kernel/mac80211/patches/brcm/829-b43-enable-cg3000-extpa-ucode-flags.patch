@@ -1,13 +1,13 @@
 --- a/drivers/net/wireless/broadcom/b43/b43.h
 +++ b/drivers/net/wireless/broadcom/b43/b43.h
-@@ -391,1 +391,4 @@
+@@ -391 +391,4 @@
  #define B43_HF_PR45960W		0x080000000000ULL /* PR 45960 workaround (rev >= 13 only) */
 +#define B43_HF4_EXTPA_ENABLE	0x4000 /* External PA present */
 +#define B43_HF5_4313_GPIOCTRL	0x0001 /* BCM4313/4331 ucode GPIO control */
 +
 --- a/drivers/net/wireless/broadcom/b43/main.c
 +++ b/drivers/net/wireless/broadcom/b43/main.c
-@@ -5126,8 +5126,34 @@ static int b43_wireless_core_init(struct
+@@ -5126,7 +5126,26 @@ static int b43_wireless_core_init(struct
  		    dev->dev->sdev->bus->pcicore.dev->id.revision <= 10)
  			hf |= B43_HF_PCISCW; /* PCI slow clock workaround. */
  #endif
@@ -31,14 +31,7 @@
 +		b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5, hostf5);
 +	}
 +
- 	b43_hf_write(dev, hf);
-+	if (b43_cg3000_4331_board(dev))
-+		b43info(dev->wl,
-+			"CG3000 ucode host flags: hf=0x%012llx hostf2=0x%04x hostf4=0x%04x hostf5=0x%04x\n",
-+			b43_hf_read(dev),
-+			b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF2),
-+			b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF4),
-+			b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_HOSTF5));
+	b43_hf_write(dev, hf);
  
  	/* tell the ucode MAC capabilities */
  	if (dev->dev->core_rev >= 13) {

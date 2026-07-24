@@ -1,6 +1,7 @@
 --- a/drivers/net/wireless/broadcom/b43/main.c
 +++ b/drivers/net/wireless/broadcom/b43/main.c
-@@ -1710,6 +1710,33 @@
+@@ -1684,6 +1684,33 @@ static u16 b43_antenna_to_phyctl(int ant
+ 	B43_WARN_ON(1);
  	return 0;
  }
  
@@ -31,9 +32,8 @@
 +	return (txchain << 6) & B43_TXH_PHY_ANT;
 +}
 +
- static void b43_cg3000_dump_beacon_ies(struct b43_wldev *dev,
- 					const struct sk_buff *skb,
- 					size_t checked_len,
+ static void b43_write_beacon_template(struct b43_wldev *dev,
+ 				      u16 ram_offset,
 @@ -1791,7 +1818,7 @@
  
  	/* Write the PHY TX control parameters. */

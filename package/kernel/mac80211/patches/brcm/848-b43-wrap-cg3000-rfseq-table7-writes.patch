@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -808,6 +808,42 @@ static void b43_phy_ht_cg3000_rfseq_tab
+@@ -841,6 +841,42 @@
  	dev->phy.writes_counter = 0;
  }
  
@@ -40,19 +40,19 @@
 +	b43_phy_ht_cg3000_phy_write_direct(dev, ctl_reg, saved);
 +}
 +
- static void b43_phy_ht_cg3000_write_rf_switch_table(struct b43_wldev *dev,
- 						    const u16 table[64])
- {
-@@ -1089,6 +1123,8 @@ static void b43_phy_ht_cg3000_apply_gai
+ static u32 b43_phy_ht_cg3000_rfseq_tab_read32(struct b43_wldev *dev,
+ 					      unsigned int table_id,
+ 					      unsigned int offset)
+@@ -1137,6 +1173,8 @@
+ 		{ 0xf6, 0x17, 0x17, 0x00, 0x40 },
  	};
  	unsigned int i;
- 
 +	u16 ctl_reg, saved_ctl;
 +	u32 modified_table[128];
+ 
  	if (!b43_cg3000_4331_board(dev))
  		return;
- 
-@@ -1100,6 +1136,7 @@ static void b43_phy_ht_cg3000_apply_gai
+@@ -1150,6 +1188,7 @@
  	 * 128-entry table at image1.out:0x81107fd8, with one 5-byte record per
  	 * TX power index.
  	 */
@@ -60,7 +60,7 @@
  	for (i = 0; i < ARRAY_SIZE(ecos_2g_gain_table); i++) {
  		const u8 *entry = ecos_2g_gain_table[i];
  		u32 value = (0xff << 24) | (entry[2] << 16) |
-@@ -1108,6 +1145,7 @@ static void b43_phy_ht_cg3000_apply_gai
+@@ -1157,6 +1196,7 @@
  
  		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 192 + i, value);
  	}
@@ -68,7 +68,7 @@
  
  	for (i = 0; i < ARRAY_SIZE(ecos_2g_gain_table); i++) {
  		const u8 *entry = ecos_2g_gain_table[i];
-@@ -1115,10 +1153,14 @@ static void b43_phy_ht_cg3000_apply_gai
+@@ -1164,9 +1204,13 @@
  
  		value = (value & 0x000fffff) | (entry[3] << 28) |
  			(entry[4] << 20);
@@ -76,16 +76,14 @@
 +		modified_table[i] = value;
  	}
  
--	b43info(dev->wl, "CG3000 HTPHY RFSEQ table7 gain table applied\n");
 +	saved_ctl = b43_phy_ht_cg3000_rfseq_table7_begin_write(dev, &ctl_reg);
 +	for (i = 0; i < ARRAY_SIZE(ecos_2g_gain_table); i++)
 +		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 320 + i, modified_table[i]);
 +	b43_phy_ht_cg3000_rfseq_table7_end_write(dev, ctl_reg, saved_ctl);
-+	b43info(dev->wl, "CG3000 HTPHY RFSEQ table7 gain table applied with ctl 0x%03x\n", ctl_reg);
  }
  
  static s16 b43_phy_ht_cg3000_sat_add_s16(s16 a, s16 b)
-@@ -1305,6 +1347,7 @@ static void b43_phy_ht_cg3000_apply_par
+@@ -1306,6 +1350,7 @@
  	const u8 parfps = 8;
  	const u8 vlin2g = 1;
  	const u8 gain_settle_dly_2g = 3;
@@ -93,7 +91,7 @@
  	s16 ref_mantissa;
  	s16 ref_shift;
  	s16 last_mantissa = 0;
-@@ -1321,6 +1364,7 @@ static void b43_phy_ht_cg3000_apply_par
+@@ -1322,6 +1367,7 @@
  
  	b43_phy_ht_cg3000_log2_fixed(64, 0, &ref_mantissa, &ref_shift);
  
@@ -101,7 +99,7 @@
  	for (i = 0; i < 128; i++) {
  		s16 gain = ecos_2g_gain_keys[i];
  		s32 numerator;
-@@ -1364,12 +1408,16 @@ static void b43_phy_ht_cg3000_apply_par
+@@ -1362,14 +1408,17 @@
  		value |= vlin2g << 10;
  		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, value);
  	}
@@ -110,15 +108,18 @@
 -	for (i = 0; i <= gain_settle_dly_2g; i++) {
 -		u32 value = b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7,
 -							       576 + gain_settle_dly_2g);
+-
+-		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, value);
 +	{
 +		u32 settle_value = b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7,
-+								     576 + gain_settle_dly_2g);
- 
--		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, value);
++								      576 + gain_settle_dly_2g);
++
 +		saved_ctl = b43_phy_ht_cg3000_rfseq_table7_begin_write(dev, &ctl_reg);
 +		for (i = 0; i <= gain_settle_dly_2g; i++)
 +			b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, settle_value);
 +		b43_phy_ht_cg3000_rfseq_table7_end_write(dev, ctl_reg, saved_ctl);
  	}
+-
+ }
  
- 	b43info(dev->wl,
+ static void b43_phy_ht_cg3000_apply_table24(struct b43_wldev *dev)

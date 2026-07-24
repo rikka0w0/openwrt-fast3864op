@@ -1,0 +1,22 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -6161,6 +6161,19 @@ static struct b43_wl *b43_wireless_init(
+ 
+ 	wl->hw_registered = false;
+ 	hw->max_rates = 2;
++	if (dev->chip_id == BCMA_CHIP_ID_BCM4331 &&
++	    sprom->revision == 9 &&
++	    sprom->board_type == 0x05a9 &&
++	    sprom->board_rev == 0x1100) {
++		/*
++		 * The CG3000 BCM4331 HTPHY TX path only has minimal HT header
++		 * support.  Multi-rate retry means constructing a second HT
++		 * PLCP/PHY control path, which currently causes high retry and
++		 * beacon-loss rates.  Keep rate control on a single HT rate.
++		 */
++		hw->max_rates = 1;
++		hw->max_report_rates = 1;
++	}
+ 	SET_IEEE80211_DEV(hw, dev->dev);
+ 	if (is_valid_ether_addr(sprom->et1mac))
+ 		SET_IEEE80211_PERM_ADDR(hw, sprom->et1mac);

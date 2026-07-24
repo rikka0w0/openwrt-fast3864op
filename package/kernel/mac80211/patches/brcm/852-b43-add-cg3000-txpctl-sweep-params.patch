@@ -30,7 +30,7 @@
  MODULE_PARM_DESC(cg3000_aa2g,
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -615,11 +615,19 @@ static void b43_phy_ht_tx_power_ctl_idle
+@@ -615,8 +615,16 @@ static void b43_phy_ht_tx_power_ctl_idle
  		 * 2 GHz idle TSSI initvars and passes them directly to
  		 * MCP_iHtPhySetIdleTssiForCore(), instead of measuring them
  		 * with a live TX tone.
@@ -42,14 +42,9 @@
  		 */
  		for (core = 0; core < 3; core++)
 -			phy_ht->idle_tssi[core] = sprom->core_pwr_info[core].itssi_2g;
--		b43info(dev->wl, "CG3000 HTPHY idle TSSI from SPROM: %u/%u/%u\n",
 +			phy_ht->idle_tssi[core] =
 +				b43_modparam_cg3000_idle_tssi >= 0 ?
 +				b43_modparam_cg3000_idle_tssi & 0x3f :
 +				sprom->core_pwr_info[core].itssi_2g;
-+		b43info(dev->wl, "CG3000 HTPHY idle TSSI: %u/%u/%u param=%d\n",
- 			phy_ht->idle_tssi[0], phy_ht->idle_tssi[1],
--			phy_ht->idle_tssi[2]);
-+			phy_ht->idle_tssi[2], b43_modparam_cg3000_idle_tssi);
  		return;
  	}

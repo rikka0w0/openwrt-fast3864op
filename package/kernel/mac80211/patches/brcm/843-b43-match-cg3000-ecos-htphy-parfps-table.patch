@@ -1,7 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -1068,6 +1068,214 @@ static void b43_phy_ht_cg3000_apply_gai
- 	b43info(dev->wl, "CG3000 HTPHY RFSEQ table7 gain table applied\n");
+@@ -1068,5 +1068,208 @@ static void b43_phy_ht_cg3000_apply_gai
  }
  
 +static s16 b43_phy_ht_cg3000_sat_add_s16(s16 a, s16 b)
@@ -205,11 +204,6 @@
 +		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 576 + i, value);
 +	}
 +
-+	b43info(dev->wl,
-+		"CG3000 HTPHY RFSEQ table7 parfps table applied: first=0x%08x settle=0x%08x last=0x%08x\n",
-+		b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7, 576),
-+		b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7, 576 + gain_settle_dly_2g),
-+		b43_phy_ht_cg3000_rfseq_tab_read32(dev, 7, 703));
 +}
 +
  static void b43_phy_ht_cg3000_apply_table24(struct b43_wldev *dev)

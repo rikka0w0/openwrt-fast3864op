@@ -32,7 +32,7 @@
  static void b43_phy_ht_cg3000_write_rf_switch_table(struct b43_wldev *dev,
  						    const u16 table[64])
  {
-@@ -882,6 +901,172 @@ static void b43_phy_ht_cg3000_apply_rf_
+@@ -882,6 +901,171 @@ static void b43_phy_ht_cg3000_apply_rf_
  		b43_phy_ht_cg3000_swctrlmap_flags(swctrlmap_2g));
  }
  
@@ -199,7 +199,6 @@
 +		b43_phy_ht_cg3000_rfseq_tab_write32(dev, 7, 320 + i, value);
 +	}
 +
-+	b43info(dev->wl, "CG3000 HTPHY RFSEQ table7 gain table applied\n");
 +}
 +
  static void b43_phy_ht_cg3000_apply_table24(struct b43_wldev *dev)

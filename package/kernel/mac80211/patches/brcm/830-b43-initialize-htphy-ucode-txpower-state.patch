@@ -13,7 +13,7 @@
  #define B43_SHM_SH_OFDMDIRECT		0x01C0	/* Pointer to OFDM direct map */
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -625,6 +625,37 @@
+@@ -625,6 +625,31 @@
  		b43info(dev->wl, "CG3000 HTPHY TSSI mux=0x%04x\n", mux);
  }
  
@@ -40,23 +40,8 @@
 +			target_shm);
 +	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_CUR,
 +			target_shm);
-+	b43info(dev->wl,
-+		"CG3000 HTPHY ucode TX power: n=%u target=0x%04x max=%u cur=0x%04x\n",
-+		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_N),
-+		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_TARGET),
-+		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_MAX),
-+		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_CUR));
 +}
 +
  static void b43_phy_ht_tx_power_ctl_setup(struct b43_wldev *dev)
  {
  	struct b43_phy_ht *phy_ht = dev->phy.ht;
-@@ -742,6 +769,8 @@
- 		b43_httab_write_bulk(dev, B43_HTTAB16(26 + c, 0), 64, regval);
- 	}
- 
-+	b43_phy_ht_update_ucode_txpower(dev, target);
-+
- 	if (dev->dev->chip_id == BCMA_CHIP_ID_BCM4331)
- 		b43info(dev->wl,
- 			"HT TX power setup: freq=%u target=%u/%u/%u idle=%u/%u/%u a1=%d/%d/%d b0=%d/%d/%d b1=%d/%d/%d cmd=%04x/%04x/%04x targ=%04x/%04x idle_reg=%04x/%04x n=%04x tssimode=%04x\n",

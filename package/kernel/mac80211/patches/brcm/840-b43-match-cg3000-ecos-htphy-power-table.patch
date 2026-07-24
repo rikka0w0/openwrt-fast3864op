@@ -9,7 +9,7 @@
  	u16 freq = dev->phy.chandef->chan->center_freq;
  	int i, c;
  
-@@ -915,6 +915,28 @@ static void b43_phy_ht_tx_power_ctl_setu
+@@ -915,6 +915,22 @@ static void b43_phy_ht_tx_power_ctl_setu
  	}
  
  	b43_phy_set(dev, B43_PHY_HT_TSSIMODE, B43_PHY_HT_TSSIMODE_EN);
@@ -27,18 +27,12 @@
 +		b43_phy_maskset(dev, 488, 0xf8ff, 0x0300);
 +		b43_phy_mask(dev, 487, 0xf7ff);
 +		b43_phy_mask(dev, 487, 0xfbff);
-+		b43info(dev->wl,
-+			"CG3000 HTPHY eCos TXPCTL raw regs: phy122=0x%04x phy487=0x%04x phy488=0x%04x phy489=0x%04x\n",
-+			b43_phy_read(dev, 0x0122),
-+			b43_phy_read(dev, 487),
-+			b43_phy_read(dev, 488),
-+			b43_phy_read(dev, 489));
 +	}
 +
  	b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1,
  		     ~B43_PHY_HT_TXPCTL_CMD_C1_PCTLEN & 0xFFFF);
  	if (b43_cg3000_4331_board(dev) && sprom->fem.ghz2.pdet_range)
-@@ -1015,7 +1037,6 @@ static void b43_phy_ht_tx_power_ctl_setu
+@@ -1015,14 +1037,20 @@ static void b43_phy_ht_tx_power_ctl_setu
  
  	for (c = 0; c < 3; c++) {
  		s32 num, den, pwr;
@@ -46,7 +40,7 @@
  
  		for (i = 0; i < 64; i++) {
  			num = 8 * (16 * b0[c] + b1[c] * i);
-@@ -1023,7 +1044,12 @@ static void b43_phy_ht_tx_power_ctl_setu
+ 			den = 32768 + a1[c] * i;
  			pwr = max((4 * num + den / 2) / den, -8);
  			regval[i] = pwr;
  		}
@@ -58,5 +52,6 @@
 +		 */
 +		b43_httab_write_bulk(dev, B43_HTTAB8(26 + c, 0), 64, regval);
  	}
- 
- 	b43_phy_ht_update_ucode_txpower(dev, target);
++
++	b43_phy_ht_update_ucode_txpower(dev, target);
+ }

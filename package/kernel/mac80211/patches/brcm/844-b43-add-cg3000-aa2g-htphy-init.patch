@@ -24,7 +24,7 @@
  MODULE_PARM_DESC(cg3000_gpio_mask,
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -1303,6 +1303,58 @@ static void b43_phy_ht_cg3000_apply_tab
+@@ -1303,6 +1303,51 @@ static void b43_phy_ht_cg3000_apply_tab
  	b43info(dev->wl, "CG3000 HTPHY RFSEQ table24 detector map applied\n");
  }
  
@@ -68,16 +68,9 @@
 +		b43_phy_maskset(dev, 0x04b1, ~0x0200, 0x0000);
 +		break;
 +	default:
-+		b43info(dev->wl,
-+			"CG3000 HTPHY aa2g=%u skipped: eCos only handles 1/2/3\n",
-+			aa2g);
 +		return;
 +	}
 +
-+	b43info(dev->wl,
-+		"CG3000 HTPHY aa2g=%u applied: phy410=0x%04x phy4b0=0x%04x phy4b1=0x%04x\n",
-+		aa2g, b43_phy_read(dev, 0x0410), b43_phy_read(dev, 0x04b0),
-+		b43_phy_read(dev, 0x04b1));
 +}
 +
  static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)

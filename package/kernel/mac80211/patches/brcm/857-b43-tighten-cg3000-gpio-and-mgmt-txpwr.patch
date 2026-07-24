@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/main.c
 +++ b/drivers/net/wireless/broadcom/b43/main.c
-@@ -1918,10 +1918,14 @@ static void b43_write_beacon_template(st
+@@ -1918,12 +1918,16 @@ static void b43_write_beacon_template(st
  	/* We can't send beacons with short preamble. Would get PHY errors. */
  	ctl &= ~B43_TXH_PHY_SHORTPRMBL;
  	ctl &= ~B43_TXH_PHY_ANT;
@@ -17,40 +17,7 @@
  	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_BEACPHYCTL, ctl);
  
  	if (dev->phy.type == B43_PHYTYPE_HT) {
-@@ -3209,6 +3213,7 @@ static int b43_gpio_init(struct b43_wlde
- 	case B43_BUS_BCMA: {
- 		struct bcma_drv_cc *cc = &dev->dev->bdev->bus->drv_cc;
- 		u32 gpio_ctl;
-+		u32 gpio_drive_mask = mask;
- 		u16 mmio_gpio_mask = b43_read16(dev, B43_MMIO_GPIO_MASK);
- 		u16 mmio_gpio_ctl = b43_read16(dev, B43_MMIO_GPIO_CONTROL);
- 		u32 chipctl_before = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
-@@ -3231,6 +3236,11 @@ static int b43_gpio_init(struct b43_wlde
- 				set = b43_modparam_cg3000_gpio_set;
- 			b43_maskset16(dev, B43_MMIO_GPIO_MASK, ~0, mask & 0xffff);
- 
-+			/*
-+			 * Keep direct GPIO output overrides reproducible when
-+			 * module parameters are changed across b43 reloads.
-+			 */
-+			gpio_drive_mask |= BIT(0) | BIT(1) | BIT(2) | BIT(3) | BIT(4) | BIT(5) | BIT(6);
- 			/*
- 			 * This BCM4331 is package 8.  The generic BCMA PMU
- 			 * setup enables EXTPA_EN and EXTPA_EN2 for that
-@@ -3250,10 +3260,10 @@ static int b43_gpio_init(struct b43_wlde
- 				chipctl_before, chipctl_after);
- 
- 			if (b43_modparam_cg3000_gpio_out >= 0)
--				bcma_chipco_gpio_out(cc, mask,
-+				bcma_chipco_gpio_out(cc, gpio_drive_mask,
- 						     b43_modparam_cg3000_gpio_out);
- 			if (b43_modparam_cg3000_gpio_outen >= 0)
--				bcma_chipco_gpio_outen(cc, mask,
-+				bcma_chipco_gpio_outen(cc, gpio_drive_mask,
- 						       b43_modparam_cg3000_gpio_outen);
- 		}
- 
-@@ -3593,11 +3603,17 @@ static void b43_mgmtframe_txantenna(stru
+@@ -3593,11 +3603,19 @@ static void b43_mgmtframe_txantenna(stru
  
  	/* For ACK/CTS */
  	tmp = b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_ACKCTSPHYCTL);

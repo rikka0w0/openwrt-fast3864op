@@ -39,25 +39,18 @@
 +	}
 +}
 +
- static void b43_cg3000_dump_beacon_ies(struct b43_wldev *dev,
- 					const struct sk_buff *skb,
- 					size_t checked_len,
-@@ -1824,6 +1859,20 @@ static void b43_write_beacon_template(st
+ static void b43_write_beacon_template(struct b43_wldev *dev,
+ 				      u16 ram_offset,
+ 				      u16 shm_size_offset)
+@@ -1824,6 +1859,13 @@ static void b43_write_beacon_template(st
  		ctl |= B43_TXH_PHY_ENC_OFDM;
  	b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_BEACPHYCTL, ctl);
  
 +	if (dev->phy.type == B43_PHYTYPE_HT) {
 +		u16 ext_ctl = b43_beacon_phy_ctl1(dev, rate);
-+		static unsigned int logs;
 +
 +		b43_shm_write16(dev, B43_SHM_SHARED, B43_SHM_SH_EXTNPHYCTL,
 +				ext_ctl);
-+		if (b43_cg3000_4331_board(dev) && logs < 16) {
-+			b43info(dev->wl,
-+				"CG3000 beacon phyctl: rate=0x%02x phyctl=0x%04x ext=0x%04x\n",
-+				rate, ctl, ext_ctl);
-+			logs++;
-+		}
 +	}
 +
  	/* Find the position of the TIM and the DTIM_period value

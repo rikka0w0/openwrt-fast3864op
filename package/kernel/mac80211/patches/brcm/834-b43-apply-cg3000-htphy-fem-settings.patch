@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -664,6 +664,84 @@ static void b43_phy_ht_update_ucode_txpo
+@@ -664,6 +664,74 @@ static void b43_phy_ht_update_ucode_txpo
  		b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_TXPWR_CUR));
  }
  
@@ -30,8 +30,6 @@
 +	for (i = 0; i < ARRAY_SIZE(triso_regs); i++)
 +		b43_phy_write(dev, triso_regs[i], triso_values[triso][i]);
 +
-+	b43info(dev->wl, "CG3000 HTPHY triso=%u applied\n",
-+		sprom->fem.ghz2.tr_iso);
 +}
 +
 +static void b43_phy_ht_cg3000_apply_pdet_range(struct b43_wldev *dev)
@@ -58,28 +56,20 @@
 +				pdet_range3_gain[core]);
 +	}
 +
-+	b43info(dev->wl, "CG3000 HTPHY pdet_range=3 table applied\n");
 +}
 +
 +static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)
 +{
-+	struct ssb_sprom *sprom = dev->dev->bus_sprom;
-+
 +	if (!b43_cg3000_4331_board(dev))
 +		return;
 +
 +	/*
 +	 * The proprietary BCM4331/BCM4332 HTPHY path uses the 2 GHz FEM
-+	 * fields from SPROM rev 9.  On CG3000-2STAUS the observed values are
-+	 * pdet_range=3, tr_iso=3 and antswlut=0.  The antswlut path is
-+	 * intentionally left untouched here: eCos only writes HTPHY table 9
-+	 * for non-zero antswlut values, while this board reports zero.
++	 * fields from SPROM rev 9. On CG3000-2STAUS the observed values are
++	 * pdet_range=3 and tr_iso=3.
 +	 */
 +	b43_phy_ht_cg3000_apply_pdet_range(dev);
 +	b43_phy_ht_cg3000_apply_triso(dev);
-+	if (sprom->fem.ghz2.antswlut)
-+		b43info(dev->wl, "CG3000 HTPHY antswlut=%u is not implemented\n",
-+			sprom->fem.ghz2.antswlut);
 +}
 +
  static void b43_phy_ht_tx_power_ctl_setup(struct b43_wldev *dev)

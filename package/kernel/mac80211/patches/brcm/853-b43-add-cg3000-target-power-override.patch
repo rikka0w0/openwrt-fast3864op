@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -1599,6 +1599,27 @@ static void b43_phy_ht_tx_power_ctl_setu
+@@ -1599,6 +1599,23 @@ static void b43_phy_ht_tx_power_ctl_setu
  		b1[0] = b1[1] = b1[2] = -1393;
  	}
  
@@ -19,10 +19,6 @@
 +		 * 124 to be the strongest stable b43 value; the module parameter
 +		 * remains writable for later RF/power-control sweeps.
 +		 */
-+		b43info(dev->wl,
-+			"CG3000 HTPHY target power: %u/%u/%u param=%d\n",
-+			target[0], target[1], target[2],
-+			b43_modparam_cg3000_target_power);
 +	}
 +
  	b43_phy_set(dev, B43_PHY_HT_TSSIMODE, B43_PHY_HT_TSSIMODE_EN);

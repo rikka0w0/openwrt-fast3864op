@@ -1,7 +1,7 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -1299,6 +1299,117 @@ static void b43_phy_ht_cg3000_apply_tab
- 	b43info(dev->wl, "CG3000 HTPHY RFSEQ table24 detector map applied\n");
+@@ -1485,6 +1485,114 @@ static void b43_phy_ht_cg3000_apply_tab
+ 
  }
  
 +static void b43_phy_ht_cg3000_apply_register_tables(struct b43_wldev *dev)
@@ -44,7 +44,6 @@
 +		b43_phy_write(dev, 0x0186 + i, reg_0x186_values[i]);
 +
 +	b43_phy_set(dev, 0x0217, 0x0040);
-+	b43info(dev->wl, "CG3000 HTPHY eCos register tables applied\n");
 +}
 +
 +static void b43_phy_ht_cg3000_apply_ecos_afe_init(struct b43_wldev *dev)
@@ -95,8 +94,6 @@
 +	b43_phy_maskset(dev, 0x0324, ~0x3f00, 0x0f00);
 +	for (core = 0; core < 3; core++)
 +		b43_phy_set(dev, core_tx_regs[core], 0x2000);
-+
-+	b43info(dev->wl, "CG3000 HTPHY eCos AFE init applied\n");
 +}
 +
 +static void b43_phy_ht_cg3000_apply_radio159(struct b43_wldev *dev)
@@ -118,18 +115,18 @@
  static void b43_phy_ht_cg3000_apply_aa2g(struct b43_wldev *dev)
  {
  	u8 aa2g;
-@@ -1788,6 +1845,7 @@ static void b43_phy_ht_tx_power_ctl_set
+@@ -1718,6 +1823,7 @@ static void b43_phy_ht_tx_power_ctl_set
  	}
  
  	b43_phy_ht_update_ucode_txpower(dev, target);
 +	b43_phy_ht_cg3000_apply_radio159(dev);
+ }
  
- 	if (dev->dev->chip_id == BCMA_CHIP_ID_BCM4331)
- 		b43info(dev->wl,
-@@ -2079,5 +2199,7 @@ static int b43_phy_ht_op_init(struct b4
+ /**************************************************
+@@ -1967,6 +2073,8 @@ static int b43_phy_ht_op_init(struct b4
  	b43_phy_ht_cg3000_apply_rf_switch_map(dev);
  	b43_phy_ht_cg3000_apply_parfps_table(dev);
-	b43_phy_ht_cg3000_apply_table24(dev);
+ 	b43_phy_ht_cg3000_apply_table24(dev);
 +	b43_phy_ht_cg3000_apply_register_tables(dev);
 +	b43_phy_ht_cg3000_apply_ecos_afe_init(dev);
  

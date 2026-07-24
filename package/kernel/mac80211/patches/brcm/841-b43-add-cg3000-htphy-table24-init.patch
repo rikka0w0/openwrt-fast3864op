@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -882,6 +882,37 @@ static void b43_phy_ht_cg3000_apply_rf_
+@@ -882,6 +882,36 @@ static void b43_phy_ht_cg3000_apply_rf_
  		b43_phy_ht_cg3000_swctrlmap_flags(swctrlmap_2g));
  }
  
@@ -32,7 +32,6 @@
 +	}
 +	dev->phy.writes_counter = 0;
 +
-+	b43info(dev->wl, "CG3000 HTPHY RFSEQ table24 detector map applied\n");
 +}
 +
  static void b43_phy_ht_cg3000_apply_fem(struct b43_wldev *dev)

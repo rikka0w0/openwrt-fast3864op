@@ -12,9 +12,9 @@
 +	.n_bitrates	= b43_g_ratetable_size,
 +	.ht_cap		= {
 +		.ht_supported	= true,
-+		.cap		= IEEE80211_HT_CAP_SGI_20,
-+		.ampdu_factor	= IEEE80211_HT_MAX_AMPDU_64K,
-+		.ampdu_density	= 0,
++		.cap		= 0,
++		.ampdu_factor	= IEEE80211_HT_MAX_AMPDU_8K,
++		.ampdu_density	= 7,
 +		.mcs		= {
 +			.rx_mask	= { 0xff },
 +			.tx_params	= IEEE80211_HT_MCS_TX_DEFINED,
@@ -30,9 +30,9 @@
 +	.n_bitrates	= b43_g_ratetable_size,
 +	.ht_cap		= {
 +		.ht_supported	= true,
-+		.cap		= IEEE80211_HT_CAP_SGI_20,
-+		.ampdu_factor	= IEEE80211_HT_MAX_AMPDU_64K,
-+		.ampdu_density	= 0,
++		.cap		= 0,
++		.ampdu_factor	= IEEE80211_HT_MAX_AMPDU_8K,
++		.ampdu_density	= 7,
 +		.mcs		= {
 +			.rx_mask	= { 0xff },
 +			.tx_params	= IEEE80211_HT_MCS_TX_DEFINED,

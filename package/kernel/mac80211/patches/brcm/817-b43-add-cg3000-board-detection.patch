@@ -1,0 +1,49 @@
+--- a/drivers/net/wireless/broadcom/b43/main.c
++++ b/drivers/net/wireless/broadcom/b43/main.c
+@@ -454,6 +454,18 @@ void b43err(struct b43_wl *wl, const cha
+ 	va_end(args);
+ }
+ 
++static bool b43_cg3000_4331_board(struct b43_wldev *dev)
++{
++	struct ssb_sprom *sprom = dev->dev->bus_sprom;
++
++	return dev->dev->chip_id == BCMA_CHIP_ID_BCM4331 &&
++	       dev->phy.type == B43_PHYTYPE_HT &&
++	       sprom->revision == 9 &&
++	       sprom->board_type == 0x05a9 &&
++	       sprom->board_rev == 0x1100;
++}
++
++
+ void b43warn(struct b43_wl *wl, const char *fmt, ...)
+ {
+ 	struct va_format vaf;
+@@ -2948,9 +2984,25 @@ static int b43_gpio_init(struct b43_wlde
+ 
+ 	switch (dev->dev->bus_type) {
+ #ifdef CPTCFG_B43_BCMA
+-	case B43_BUS_BCMA:
+-		bcma_chipco_gpio_control(&dev->dev->bdev->bus->drv_cc, mask, set);
++	case B43_BUS_BCMA: {
++		struct bcma_drv_cc *cc = &dev->dev->bdev->bus->drv_cc;
++		u32 chipctl_after = bcma_cc_read32(cc, BCMA_CC_CHIPCTL);
++
++		if (b43_cg3000_4331_board(dev)) {
++			/*
++			 * This BCM4331 is package 8.  The generic BCMA PMU
++			 * setup enables EXTPA_EN and EXTPA_EN2 for that
++			 * package, so keep that normal package-8 external-PA
++			 * path on this board.
++			 */
++			chipctl_after |= BCMA_CHIPCTL_4331_EXTPA_EN |
++					 BCMA_CHIPCTL_4331_EXTPA_EN2;
++			bcma_cc_write32(cc, BCMA_CC_CHIPCTL, chipctl_after);
++		}
++
++		bcma_chipco_gpio_control(cc, mask, set);
+ 		break;
++	}
+ #endif
+ #ifdef CPTCFG_B43_SSB
+ 	case B43_BUS_SSB:

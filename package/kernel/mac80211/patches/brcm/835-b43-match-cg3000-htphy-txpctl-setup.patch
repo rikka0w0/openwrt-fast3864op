@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/broadcom/b43/phy_ht.c
 +++ b/drivers/net/wireless/broadcom/b43/phy_ht.c
-@@ -939,16 +939,23 @@ static void b43_phy_ht_tx_power_ctl_setu
+@@ -939,16 +939,19 @@ static void b43_phy_ht_tx_power_ctl_setu
  	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_IDLE_TSSI2,
  			~B43_PHY_HT_TXPCTL_IDLE_TSSI2_C3,
  			idle[2] << B43_PHY_HT_TXPCTL_IDLE_TSSI2_C3_SHIFT);
@@ -22,10 +22,6 @@
 +		 */
 +		b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1, ~0x0800);
 +		b43_phy_mask(dev, B43_PHY_HT_TXPCTL_CMD_C1, ~0x0400);
-+		b43info(dev->wl,
-+			"CG3000 HTPHY matched eCos TXPCTL setup: n=0x%04x cmd_c1=0x%04x\n",
-+			b43_phy_read(dev, B43_PHY_HT_TXPCTL_N),
-+			b43_phy_read(dev, B43_PHY_HT_TXPCTL_CMD_C1));
 +	}
  
  	b43_phy_maskset(dev, B43_PHY_HT_TXPCTL_TARG_PWR,
